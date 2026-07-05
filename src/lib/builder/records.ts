@@ -17,11 +17,13 @@ type Client = NonNullable<ReturnType<typeof getAnthropicClient>>;
 
 export interface StudentActivity {
   studentName: string;
+  studentNo?: string;
   activityText: string;
 }
 
 export interface FilledRow {
   studentName: string;
+  studentNo?: string;
   /** AI slot values, keyed by slot id. Teacher slots are absent (filled later). */
   ai: Record<string, string>;
 }
@@ -80,7 +82,11 @@ export async function fillAiSlots(
   const client = getAnthropicClient();
   if (!client) return null;
   if (aiSlots.length === 0) {
-    return students.map((s) => ({ studentName: s.studentName, ai: {} }));
+    return students.map((s) => ({
+      studentName: s.studentName,
+      studentNo: s.studentNo,
+      ai: {},
+    }));
   }
 
   const rows: FilledRow[] = [];
@@ -89,6 +95,7 @@ export async function fillAiSlots(
     const done = await Promise.all(
       batch.map(async (s) => ({
         studentName: s.studentName,
+        studentNo: s.studentNo,
         ai: await fillSlotsForStudent(client, s.activityText, aiSlots),
       })),
     );

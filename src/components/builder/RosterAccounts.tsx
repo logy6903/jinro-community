@@ -123,8 +123,9 @@ export function RosterAccounts({
           </thead>
           <tbody>
             {accounts.map((a) => {
-              const renaming = active?.no === a.studentNo && active.kind === "rename";
-              const resetting = active?.no === a.studentNo && active.kind === "reset";
+              const editing = active && active.no === a.studentNo ? active : null;
+              const renaming = editing?.kind === "rename";
+              const resetting = editing?.kind === "reset";
               return (
                 <tr key={a.studentNo} className="border-t border-border align-top">
                   <td className="py-2 pr-3 font-mono text-xs">{a.studentNo}</td>
@@ -132,9 +133,9 @@ export function RosterAccounts({
                     {renaming ? (
                       <div className="flex items-center gap-1">
                         <input
-                          value={active.value}
+                          value={editing!.value}
                           onChange={(e) =>
-                            setActive({ ...active, value: e.target.value })
+                            setActive({ ...editing!, value: e.target.value })
                           }
                           maxLength={40}
                           className={inputSm + " w-24"}
@@ -142,9 +143,11 @@ export function RosterAccounts({
                         />
                         <button
                           type="button"
-                          disabled={busy || !active.value.trim()}
+                          disabled={busy || !editing!.value.trim()}
                           onClick={() =>
-                            void act("rename", a.studentNo, { name: active.value.trim() })
+                            void act("rename", a.studentNo, {
+                              name: editing!.value.trim(),
+                            })
                           }
                           className={chip + " border-brand text-brand"}
                         >
@@ -174,9 +177,9 @@ export function RosterAccounts({
                       <div className="flex items-center gap-1">
                         <input
                           type="text"
-                          value={active.value}
+                          value={editing!.value}
                           onChange={(e) =>
-                            setActive({ ...active, value: e.target.value })
+                            setActive({ ...editing!, value: e.target.value })
                           }
                           placeholder="새 비밀번호"
                           className={inputSm + " w-28"}
@@ -184,10 +187,10 @@ export function RosterAccounts({
                         />
                         <button
                           type="button"
-                          disabled={busy || active.value.length < 4}
+                          disabled={busy || editing!.value.length < 4}
                           onClick={() =>
                             void act("reset_password", a.studentNo, {
-                              password: active.value,
+                              password: editing!.value,
                             })
                           }
                           className={chip + " border-brand text-brand"}

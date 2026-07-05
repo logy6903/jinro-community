@@ -5,9 +5,12 @@ import type { RecordSlot } from "@/lib/builder/types";
 
 // POST /api/builder/records — 생기부 phase 1.
 // Body: { appIds: string[], slots: RecordSlot[] }. Gathers the teacher's own
-// apps, groups submissions by student name, and drafts each "ai" slot from that
-// student's activity. Returns { rows: [{ studentName, ai: {slotId: text} }] }.
-// Teacher ("판단") slots are left for the result grid. Owner-only.
+// apps, groups submissions by the student's stable account id (studentId) so a
+// student's work merges across apps and years even if their 학번 or displayed
+// name changed. Open apps (no accounts) fall back to grouping by name. Drafts
+// each "ai" slot from that student's activity. Returns
+// { rows: [{ studentName, studentNo, ai: {slotId: text} }] }. Teacher ("판단")
+// slots are left for the result grid. Owner-only.
 
 const MAX_SLOTS = 12;
 
@@ -59,28 +62,36 @@ export async function POST(req: Request) {
     return Response.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Group submissions by student name (MVP identity — a roster hardens this).
-  const byStudent = new Map<string, string[]>();
+  // Group by the stable account id when present; fall back to name for open
+  // apps. The group carries a display name + the most recent 학번.
+  const groups = new Map<
+    string,
+    { name: string; studentNo: string; works: string[] }
+  >();
   for (const app of apps) {
     const subs = await listSubmissions(app.id);
     for (const s of subs) {
       const name = s.studentName.trim() || "익명";
+      const key = s.studentId ? `id:${s.studentId}` : `name:${name}`;
       const content = app.fields
         .map((f) => {
           const v = s.answers[f.id];
           return `- ${f.label}: ${v === undefined || v === "" ? "(빈칸)" : String(v)}`;
         })
         .join("\n");
-      const arr = byStudent.get(name) ?? [];
-      arr.push(`[과제: ${app.title}]\n${content}`);
-      byStudent.set(name, arr);
+      const g = groups.get(key) ?? { name, studentNo: "", works: [] };
+      g.name = name; // same account → same name; last wins for name-keyed groups
+      if (s.studentNo) g.studentNo = s.studentNo;
+      g.works.push(`[과제: ${app.title}]\n${content}`);
+      groups.set(key, g);
     }
   }
 
-  const students: StudentActivity[] = [...byStudent.entries()]
-    .map(([studentName, works]) => ({
-      studentName,
-      activityText: works.join("\n\n"),
+  const students: StudentActivity[] = [...groups.values()]
+    .map((g) => ({
+      studentName: g.name,
+      studentNo: g.studentNo,
+      activityText: g.works.join("\n\n"),
     }))
     .sort((a, b) => a.studentName.localeCompare(b.studentName, "ko"));
 

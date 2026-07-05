@@ -30,6 +30,7 @@ interface SlotDraft {
 
 interface Row {
   studentName: string;
+  studentNo: string;
   values: Record<string, string>; // keyed by slot id
   final: string;
 }
@@ -130,11 +131,16 @@ export function RecordMaker() {
         return;
       }
       const data = (await res.json()) as {
-        rows: { studentName: string; ai: Record<string, string> }[];
+        rows: {
+          studentName: string;
+          studentNo?: string;
+          ai: Record<string, string>;
+        }[];
       };
       setRows(
         data.rows.map((r) => ({
           studentName: r.studentName,
+          studentNo: r.studentNo ?? "",
           values: { ...r.ai }, // AI slots filled; teacher slots stay undefined→""
           final: "",
         })),
@@ -175,10 +181,11 @@ export function RecordMaker() {
       const data = (await res.json()) as {
         records: { studentName: string; text: string }[];
       };
-      const byName = new Map(data.records.map((d) => [d.studentName, d.text]));
+      // compose preserves input order (row order), so map back by index — robust
+      // against students who share a display name.
       setRows((prev) =>
         prev
-          ? prev.map((r) => ({ ...r, final: byName.get(r.studentName) ?? r.final }))
+          ? prev.map((r, i) => ({ ...r, final: data.records[i]?.text ?? r.final }))
           : prev,
       );
     } catch {
@@ -191,10 +198,17 @@ export function RecordMaker() {
   function downloadCsv() {
     if (!rows) return;
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const headers = ["학생명", ...slots.map((s) => s.label), "최종 생기부", "바이트"];
+    const headers = [
+      "학번",
+      "학생명",
+      ...slots.map((s) => s.label),
+      "최종 생기부",
+      "바이트",
+    ];
     const lines = [headers.map(esc).join(",")];
     for (const r of rows) {
       const cells = [
+        r.studentNo,
         r.studentName,
         ...slots.map((s) => r.values[s.id] ?? ""),
         r.final,
@@ -441,7 +455,14 @@ export function RecordMaker() {
                     key={i}
                     className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3"
                   >
-                    <span className="text-sm font-medium">{r.studentName}</span>
+                    <span className="text-sm font-medium">
+                      {r.studentName}
+                      {r.studentNo && (
+                        <span className="ml-1.5 font-mono text-xs text-muted">
+                          {r.studentNo}
+                        </span>
+                      )}
+                    </span>
                     {slots.map((s) => (
                       <label key={s.id} className="flex flex-col gap-1 text-xs">
                         <span className="text-muted">

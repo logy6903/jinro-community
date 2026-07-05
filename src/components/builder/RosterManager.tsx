@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as XLSX from "xlsx";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type { Roster, RosterStudent } from "@/lib/builder/types";
+import { RosterAccounts } from "@/components/builder/RosterAccounts";
 
 // Class roster (명렬) management. Teacher builds a 반 with 학번·이름 (paste import).
 // This gives students a stable identity used later to tie submissions across
@@ -69,6 +70,7 @@ export function RosterManager() {
 
   const [rosters, setRosters] = useState<Roster[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [accountsId, setAccountsId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [school, setSchool] = useState("");
   const [studentsText, setStudentsText] = useState("");
@@ -297,22 +299,40 @@ export function RosterManager() {
             {rosters.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-card p-3"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3"
               >
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{r.name}</span>
-                  <span className="text-xs text-muted">
-                    {r.school ? `${r.school} · ` : ""}
-                    학생 {r.students.length}명
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{r.name}</span>
+                    <span className="text-xs text-muted">
+                      {r.school ? `${r.school} · ` : ""}
+                      학생 {r.students.length}명
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAccountsId((cur) => (cur === r.id ? null : r.id))
+                      }
+                      className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand"
+                    >
+                      {accountsId === r.id ? "계정 닫기" : "학생 계정"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => editRoster(r)}
+                      className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand"
+                    >
+                      편집
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => editRoster(r)}
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand"
-                >
-                  편집
-                </button>
+                {accountsId === r.id && (
+                  <div className="border-t border-border pt-3">
+                    <RosterAccounts roster={r} onChanged={() => void loadRosters()} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
