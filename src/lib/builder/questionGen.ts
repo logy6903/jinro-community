@@ -2,13 +2,20 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "./anthropic";
 import type { AiModelTier, ContentType, FieldType } from "./types";
 
-// Draft-stage AI: read the materials a teacher has put on an app (제시 자료) and
-// propose a student activity from them. Output is an ordered list of items — the
-// AI can emit not just questions but also its own presentation blocks (e.g. a
-// <보기> set the question refers to). This runs once at authoring time (teacher
-// side), not per student, so cost is negligible — Haiku by default, Opus opt-in.
-// Images and PDFs are fetched server-side and sent as vision/document blocks so
-// Claude reads the actual worksheet, not just a caption.
+// Draft-stage AI: read the materials a teacher put on an app (제시 자료) and
+// propose a student activity grounded ONLY in those materials — no outside
+// knowledge. Output is an ordered list of items: the AI may emit its own
+// presentation blocks (a <보기> set) as well as questions. Runs once at
+// authoring time (teacher side), not per student, so cost is negligible — Haiku
+// by default, Opus opt-in. Images and PDFs are fetched server-side and sent as
+// vision/document blocks so Claude reads the actual worksheet, not a caption.
+//
+// NOTE on video/links: the public watch page's caption baseUrls now return
+// empty (proof-of-origin token required), but the innertube ANDROID client's
+// caption baseUrls still serve timedtext — that's how we read a YouTube video
+// here. Videos without captions (or non-YouTube links) can't be read; strict
+// grounding then forbids inventing questions about them, and the UI tells the
+// teacher to paste the 스크립트 as a TEXT material instead.
 
 const MODEL_ID: Record<AiModelTier, string> = {
   fast: "claude-haiku-4-5",
@@ -64,6 +71,10 @@ async function fetchAsBase64(
   }
 }
 
+// Public innertube ANDROID client key — not a secret (it's YouTube's own public
+// client key). Used to reach caption tracks the watch page no longer serves.
+const YT_ANDROID_KEY = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w";
+
 function youTubeId(url: string): string | null {
   const patterns = [
     /youtube\.com\/watch\?[^#]*\bv=([\w-]{11})/,
@@ -77,51 +88,74 @@ function youTubeId(url: string): string | null {
   return null;
 }
 
-// Best-effort YouTube transcript so the AI can actually ground questions in the
-// video, not just its title. Pulls captionTracks from the watch page, prefers
-// Korean, fetches the json3 caption feed. Returns "" transcript when a video has
-// no captions (grounding then forbids inventing questions about it).
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
+// timedtext XML → plain text (strips <text>/<p> wrappers and inner <s> segments).
+function timedTextToString(xml: string): string {
+  const parts = [
+    ...xml.matchAll(/<(?:text|p)\b[^>]*>([\s\S]*?)<\/(?:text|p)>/g),
+  ].map((m) => m[1].replace(/<[^>]+>/g, ""));
+  return decodeEntities(parts.join(" ")).replace(/\s+/g, " ").trim();
+}
+
+// Best-effort YouTube transcript via the innertube ANDROID client. Returns ""
+// transcript when the video has no captions; null when it's not a YouTube URL
+// or the call fails (from a blocked cloud IP, etc.).
 async function fetchYouTube(
   url: string,
 ): Promise<{ title: string; transcript: string } | null> {
   const id = youTubeId(url);
   if (!id) return null;
   try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=ko`, {
-      headers: {
-        "Accept-Language": "ko,en;q=0.8",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    const res = await fetch(
+      `https://www.youtube.com/youtubei/v1/player?key=${YT_ANDROID_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent":
+            "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: "ANDROID",
+              clientVersion: "20.10.38",
+              androidSdkVersion: 34,
+              hl: "ko",
+              gl: "KR",
+            },
+          },
+          videoId: id,
+        }),
       },
-    });
+    );
     if (!res.ok) return null;
-    const html = await res.text();
-    const titleMatch = html.match(/<title>([^<]*)<\/title>/);
-    const title = titleMatch
-      ? titleMatch[1].replace(/\s*-\s*YouTube\s*$/, "").trim()
-      : "";
-    const tracksMatch = html.match(/"captionTracks":(\[.*?\])/);
-    if (!tracksMatch) return { title, transcript: "" };
-    let tracks: Array<{ baseUrl?: string; languageCode?: string }>;
-    try {
-      tracks = JSON.parse(tracksMatch[1]);
-    } catch {
-      return { title, transcript: "" };
-    }
+    const j = (await res.json()) as {
+      videoDetails?: { title?: string };
+      captions?: {
+        playerCaptionsTracklistRenderer?: {
+          captionTracks?: Array<{ baseUrl?: string; languageCode?: string }>;
+        };
+      };
+    };
+    const title = j.videoDetails?.title ?? "";
+    const tracks =
+      j.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+    if (tracks.length === 0) return { title, transcript: "" };
     const track = tracks.find((t) => t.languageCode === "ko") ?? tracks[0];
     if (!track?.baseUrl) return { title, transcript: "" };
-    const capRes = await fetch(`${track.baseUrl}&fmt=json3`);
+    const capRes = await fetch(track.baseUrl);
     if (!capRes.ok) return { title, transcript: "" };
-    const cap = (await capRes.json()) as {
-      events?: Array<{ segs?: Array<{ utf8?: string }> }>;
-    };
-    const transcript = (cap.events ?? [])
-      .flatMap((e) => e.segs ?? [])
-      .map((s) => s.utf8 ?? "")
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 8000);
+    const transcript = timedTextToString(await capRes.text()).slice(0, 8000);
     return { title, transcript };
   } catch {
     return null;
@@ -137,7 +171,7 @@ async function buildContent(
   const content: Anthropic.ContentBlockParam[] = [
     {
       type: "text",
-      text: "다음은 교사가 학생에게 제시한 수업 자료입니다. 이 자료들을 바탕으로 학생 활동을 만들어 주세요.",
+      text: "다음은 교사가 학생에게 제시한 수업 자료입니다. 이 자료들을 분석해 학생 활동을 만들어 주세요.",
     },
   ];
 
@@ -160,7 +194,7 @@ async function buildContent(
       } else {
         content.push({
           type: "text",
-          text: `${caption} (링크: ${m.value})\n※ 내용을 읽지 못했습니다. 이 링크 내용에 대한 문항은 만들지 마세요.`,
+          text: `${caption} (외부 링크: ${m.value})\n※ 내용을 읽지 못했습니다. 이 링크 내용에 대한 문항은 만들지 마세요.`,
         });
       }
     } else if (m.contentType === "image") {
@@ -176,7 +210,7 @@ async function buildContent(
           },
         });
       } else {
-        content.push({ type: "text", text: `${caption} (이미지 자료 — 열 수 없어 제목만 참고)` });
+        content.push({ type: "text", text: `${caption} (이미지 자료 — 열 수 없어 이 이미지 문항은 만들지 마세요)` });
       }
     } else if (m.contentType === "pdf") {
       const fetched = await fetchAsBase64(m.value);
@@ -187,13 +221,13 @@ async function buildContent(
           source: { type: "base64", media_type: "application/pdf", data: fetched.data },
         });
       } else {
-        content.push({ type: "text", text: `${caption} (PDF 자료 — 열 수 없어 제목만 참고)` });
+        content.push({ type: "text", text: `${caption} (PDF 자료 — 열 수 없어 이 PDF 문항은 만들지 마세요)` });
       }
     }
   }
 
   const extra = opts.instruction?.trim()
-    ? `\n\n[교사 추가 요청 — 반드시 반영]\n${opts.instruction.trim()}`
+    ? `\n\n[교사 추가 요청 — 자료 범위 안에서 반영]\n${opts.instruction.trim()}`
     : "";
 
   content.push({

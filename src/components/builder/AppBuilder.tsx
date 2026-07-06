@@ -289,7 +289,12 @@ export function AppBuilder() {
         )[];
       };
       if (data.items.length === 0) {
-        setGenError("문항을 만들지 못했어요. 자료 내용을 확인해 주세요.");
+        const hasLink = chosen.some((d) => d.contentType === "link");
+        setGenError(
+          hasLink
+            ? "영상 자막을 읽지 못했어요. 자막 있는 영상인지 확인하거나, '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
+            : "문항을 만들지 못했어요. 자료 내용을 확인해 주세요.",
+        );
         return;
       }
       // Append in order: AI-generated 보기/지문 as content drafts, questions as
@@ -618,7 +623,8 @@ export function AppBuilder() {
                         />
                         {d.contentType === "link" && (
                           <span className="text-xs text-muted">
-                            유튜브 링크는 학생 화면에서 바로 재생돼요.
+                            유튜브 링크는 학생 화면에서 바로 재생돼요. AI 문항 생성 시
+                            자막을 자동 분석합니다(자막 없으면 스크립트를 텍스트 자료로 붙여넣기).
                           </span>
                         )}
                         {d.contentType === "image" && d.value && (
@@ -824,9 +830,9 @@ export function AppBuilder() {
                 </span>
                 <p className="text-xs text-muted">
                   고른 자료를 AI가 분석해 <b>그 자료 안에서만</b> 문항을 출제해요
-                  (외부 지식·추측 없음). 이미지·PDF는 물론 <b>유튜브도 자막을 읽어</b>
-                  분석합니다. 필요하면 &lt;보기&gt; 같은 자료도 만들고, 아래
-                  &lsquo;추가 요청&rsquo;에 원하는 형식을 적을 수 있어요. (추가 후 자유롭게 수정·삭제)
+                  (외부 지식·추측 없음). 텍스트·이미지·PDF·<b>유튜브(자막)</b>를 읽습니다.
+                  자막 없는 영상은 &lsquo;스크립트&rsquo;를 텍스트 자료로 붙여넣으세요. 필요하면
+                  &lt;보기&gt;도 만들고, 아래 &lsquo;추가 요청&rsquo;에 형식을 적을 수 있어요. (추가 후 수정·삭제 자유)
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {drafts
