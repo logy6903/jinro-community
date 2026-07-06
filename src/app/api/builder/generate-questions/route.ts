@@ -1,19 +1,21 @@
 import { verifyRequestUser } from "@/lib/builder/auth";
 import { hasTeacherProfile } from "@/lib/builder/teacherProfile";
 import {
-  generateQuestions,
+  generateItems,
   type SourceMaterial,
 } from "@/lib/builder/questionGen";
 import type { AiModelTier, ContentType } from "@/lib/builder/types";
 
 // POST /api/builder/generate-questions — draft-stage AI.
-// Body: { materials: [{contentType, value, label?}], count?, model? }.
-// The teacher selects which 제시 자료 to base questions on; this reads them
-// (text/image/PDF) and returns suggested question drafts the teacher edits.
-// Teacher + profile gated (same as other write/AI routes); ≈free (1 call/app).
+// Body: { materials, count?, model?, choiceCount?, instruction? }.
+// The teacher selects which 제시 자료 to base the activity on and can add an
+// extra instruction (e.g. "make a <보기> set"). Returns an ordered list of
+// items — content blocks the AI generated + question fields — that the teacher
+// edits. Teacher + profile gated; ≈free (1 call/app).
 
 const MAX_MATERIALS = 8;
 const TEXT_MAX = 12000;
+const INSTRUCTION_MAX = 1000;
 const CONTENT_TYPES: ContentType[] = ["text", "image", "pdf", "link"];
 
 function sanitizeMaterials(raw: unknown): SourceMaterial[] {
@@ -44,6 +46,8 @@ export async function POST(req: Request) {
     materials?: unknown;
     count?: unknown;
     model?: unknown;
+    choiceCount?: unknown;
+    instruction?: unknown;
   } | null;
 
   const materials = sanitizeMaterials(body?.materials);
@@ -54,11 +58,27 @@ export async function POST(req: Request) {
     10,
     Math.max(1, typeof body?.count === "number" ? Math.floor(body.count) : 4),
   );
+  const choiceCount = Math.min(
+    6,
+    Math.max(
+      2,
+      typeof body?.choiceCount === "number" ? Math.floor(body.choiceCount) : 5,
+    ),
+  );
   const tier: AiModelTier = body?.model === "smart" ? "smart" : "fast";
+  const instruction =
+    typeof body?.instruction === "string"
+      ? body.instruction.slice(0, INSTRUCTION_MAX)
+      : undefined;
 
-  const questions = await generateQuestions(materials, count, tier);
-  if (questions === null) {
+  const items = await generateItems(materials, {
+    count,
+    tier,
+    choiceCount,
+    instruction,
+  });
+  if (items === null) {
     return Response.json({ error: "ai_unavailable" }, { status: 503 });
   }
-  return Response.json({ questions });
+  return Response.json({ items });
 }

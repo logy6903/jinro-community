@@ -3,10 +3,12 @@ import { getAnthropicClient } from "./anthropic";
 import type { AiModelTier, ContentType, FieldType } from "./types";
 
 // Draft-stage AI: read the materials a teacher has put on an app (제시 자료) and
-// propose student questions from them. This runs once at authoring time (teacher
+// propose a student activity from them. Output is an ordered list of items — the
+// AI can emit not just questions but also its own presentation blocks (e.g. a
+// <보기> set the question refers to). This runs once at authoring time (teacher
 // side), not per student, so cost is negligible — Haiku by default, Opus opt-in.
-// Images and PDFs are fetched server-side and sent to Claude as vision/document
-// blocks so it reads the actual worksheet, not just a caption.
+// Images and PDFs are fetched server-side and sent as vision/document blocks so
+// Claude reads the actual worksheet, not just a caption.
 
 const MODEL_ID: Record<AiModelTier, string> = {
   fast: "claude-haiku-4-5",
@@ -21,6 +23,7 @@ const IMAGE_TYPES: ImageMedia[] = [
   "image/gif",
   "image/webp",
 ];
+const MAX_ITEMS = 30;
 
 export interface SourceMaterial {
   contentType: ContentType;
@@ -29,10 +32,21 @@ export interface SourceMaterial {
   label?: string;
 }
 
-export interface GeneratedQuestion {
-  type: FieldType;
-  label: string;
-  options?: string[];
+/**
+ * A generated activity element. `content` is a presentation block the AI made
+ * itself (a <보기> set, an extra passage); `field` is a student question.
+ */
+export type GeneratedItem =
+  | { kind: "content"; label?: string; text: string }
+  | { kind: "field"; type: FieldType; label: string; options?: string[] };
+
+export interface GenerateOptions {
+  count: number;
+  tier: AiModelTier;
+  /** How many options each generated 객관식 question should have. */
+  choiceCount: number;
+  /** Extra teacher instruction beyond the source material (optional). */
+  instruction?: string;
 }
 
 async function fetchAsBase64(
@@ -54,12 +68,12 @@ async function fetchAsBase64(
 // then the output instruction. Unreadable assets degrade to a text note.
 async function buildContent(
   materials: SourceMaterial[],
-  count: number,
+  opts: GenerateOptions,
 ): Promise<Anthropic.ContentBlockParam[]> {
   const content: Anthropic.ContentBlockParam[] = [
     {
       type: "text",
-      text: "다음은 교사가 학생에게 제시한 수업 자료입니다. 이 자료들을 바탕으로 학생이 답할 문항을 만들어 주세요.",
+      text: "다음은 교사가 학생에게 제시한 수업 자료입니다. 이 자료들을 바탕으로 학생 활동을 만들어 주세요.",
     },
   ];
 
@@ -101,26 +115,32 @@ async function buildContent(
     }
   }
 
+  const extra = opts.instruction?.trim()
+    ? `\n\n[교사 추가 요청 — 반드시 반영]\n${opts.instruction.trim()}`
+    : "";
+
   content.push({
     type: "text",
     text:
-      `위 자료를 바탕으로 학생용 문항 ${count}개를 만들어 주세요. ` +
-      "형식은 오직 JSON 배열로만 출력하고, 다른 설명은 절대 붙이지 마세요. " +
-      '각 원소는 {"type": "short"|"long"|"choice", "label": "문항 텍스트", "options": ["보기1","보기2"]} 형태입니다. ' +
-      "options는 type이 choice일 때만 포함합니다. 단답은 short, 서술형은 long을 쓰고, 자료 이해·적용·자기생각을 고루 섞으세요.",
+      `위 자료를 바탕으로 학생 활동을 만들어 주세요. 출력은 오직 JSON 배열이며, 순서가 있는 항목들입니다. 각 항목은 둘 중 하나입니다.\n` +
+      `1) 제시·보기 블록: {"kind":"content","label":"보기","text":"내용"} — 문항이 참조할 <보기>·지문·표 등 학생에게 보여줄 자료. 필요할 때만, 해당 문항 바로 앞에 배치하세요.\n` +
+      `2) 문항: {"kind":"field","type":"short"|"long"|"choice","label":"문항 텍스트","options":["보기1","보기2"]} — options는 type이 choice일 때만.\n` +
+      `문항은 총 ${opts.count}개 만드세요. 객관식(choice) 문항의 선지(options)는 정확히 ${opts.choiceCount}개로 만드세요. 단답은 short, 서술형은 long입니다.\n` +
+      `<보기>에서 옳은 것을 고르는 유형이면, 먼저 kind:content로 <보기>(예: ㄱ,ㄴ,ㄷ 항목)를 만들고, 이어서 그 보기를 참조하는 kind:choice 문항을 두세요.\n` +
+      `자료 이해·적용·자기생각을 고루 섞고, 정답은 쓰지 마세요. JSON 외의 설명은 절대 붙이지 마세요.` +
+      extra,
   });
 
   return content;
 }
 
 const SYSTEM = [
-  "너는 교사의 수업 자료를 읽고 학생용 문항을 설계하는 조력자다.",
-  "규칙: 한국어로, 학생 수준에 맞게, 자료에 근거한 문항만 만든다. 정답은 쓰지 않는다.",
-  "자료가 여러 개면 종합해서 문항을 구성한다. 반드시 JSON 배열만 출력한다.",
+  "너는 교사의 수업 자료를 읽고 학생용 활동(제시 블록 + 문항)을 설계하는 조력자다.",
+  "규칙: 한국어로, 학생 수준에 맞게, 자료에 근거해 만든다. 정답은 쓰지 않는다.",
+  "교사의 추가 요청이 있으면 최우선으로 반영한다. 반드시 JSON 배열만 출력한다.",
 ].join("\n");
 
-function parseQuestions(raw: string): GeneratedQuestion[] {
-  // Strip code fences / prose the model may wrap around the JSON.
+function parseItems(raw: string, choiceCount: number): GeneratedItem[] {
   const start = raw.indexOf("[");
   const end = raw.lastIndexOf("]");
   if (start === -1 || end === -1 || end < start) return [];
@@ -131,43 +151,56 @@ function parseQuestions(raw: string): GeneratedQuestion[] {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  const out: GeneratedQuestion[] = [];
-  for (const item of parsed) {
+
+  const out: GeneratedItem[] = [];
+  for (const item of parsed.slice(0, MAX_ITEMS)) {
     if (!item || typeof item !== "object") continue;
     const r = item as Record<string, unknown>;
-    const label = typeof r.label === "string" ? r.label.trim().slice(0, 200) : "";
+
+    if (r.kind === "content") {
+      const text = typeof r.text === "string" ? r.text.trim().slice(0, 4000) : "";
+      if (!text) continue;
+      const label =
+        typeof r.label === "string" ? r.label.trim().slice(0, 80) : undefined;
+      out.push({ kind: "content", label, text });
+      continue;
+    }
+
+    // default to a field
+    const label = typeof r.label === "string" ? r.label.trim().slice(0, 400) : "";
     if (!label) continue;
     const type: FieldType =
       r.type === "long" || r.type === "choice" || r.type === "number"
         ? r.type
         : "short";
-    const options =
-      type === "choice" && Array.isArray(r.options)
+    let options: string[] | undefined;
+    if (type === "choice") {
+      options = Array.isArray(r.options)
         ? r.options
             .filter((o): o is string => typeof o === "string")
             .map((o) => o.trim())
             .filter(Boolean)
-            .slice(0, 8)
-        : undefined;
-    out.push({ type, label, options });
+            .slice(0, Math.max(2, choiceCount))
+        : [];
+    }
+    out.push({ kind: "field", type, label, options });
   }
   return out;
 }
 
-export async function generateQuestions(
+export async function generateItems(
   materials: SourceMaterial[],
-  count: number,
-  tier: AiModelTier,
-): Promise<GeneratedQuestion[] | null> {
+  opts: GenerateOptions,
+): Promise<GeneratedItem[] | null> {
   const client = getAnthropicClient();
   if (!client) return null;
   if (materials.length === 0) return [];
 
-  const content = await buildContent(materials, count);
+  const content = await buildContent(materials, opts);
   try {
     const res = await client.messages.create({
-      model: MODEL_ID[tier] ?? MODEL_ID.fast,
-      max_tokens: 2048,
+      model: MODEL_ID[opts.tier] ?? MODEL_ID.fast,
+      max_tokens: 3000,
       system: SYSTEM,
       messages: [{ role: "user", content }],
     });
@@ -175,7 +208,7 @@ export async function generateQuestions(
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
-    return parseQuestions(text);
+    return parseItems(text, opts.choiceCount);
   } catch {
     return null;
   }

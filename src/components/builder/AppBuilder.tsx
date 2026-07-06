@@ -161,7 +161,9 @@ export function AppBuilder() {
   // 🤖 자료 → 문항 자동 생성 (제작 단계 AI, 앱당 1회)
   const [genSelected, setGenSelected] = useState<Set<string>>(new Set());
   const [genCount, setGenCount] = useState(4);
+  const [genChoiceCount, setGenChoiceCount] = useState(5);
   const [genModel, setGenModel] = useState<AiModelTier>("fast");
+  const [genInstruction, setGenInstruction] = useState("");
   const [genBusy, setGenBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
 
@@ -264,7 +266,13 @@ export function AppBuilder() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ materials, count: genCount, model: genModel }),
+        body: JSON.stringify({
+          materials,
+          count: genCount,
+          model: genModel,
+          choiceCount: genChoiceCount,
+          instruction: genInstruction.trim() || undefined,
+        }),
       });
       if (res.status === 503) {
         setGenError("AI가 설정되지 않았어요 (.env.local 의 ANTHROPIC_API_KEY 확인).");
@@ -275,20 +283,29 @@ export function AppBuilder() {
         return;
       }
       const data = (await res.json()) as {
-        questions: { type: FieldType; label: string; options?: string[] }[];
+        items: (
+          | { kind: "content"; label?: string; text: string }
+          | { kind: "field"; type: FieldType; label: string; options?: string[] }
+        )[];
       };
-      if (data.questions.length === 0) {
+      if (data.items.length === 0) {
         setGenError("문항을 만들지 못했어요. 자료 내용을 확인해 주세요.");
         return;
       }
+      // Append in order: AI-generated 보기/지문 as content drafts, questions as
+      // field drafts. The teacher can edit or delete any of them.
       setDrafts((ds) => [
         ...ds,
-        ...data.questions.map((q) => ({
-          ...newFieldDraft(),
-          type: q.type,
-          label: q.label,
-          options: q.options?.join(", ") ?? "",
-        })),
+        ...data.items.map((it) =>
+          it.kind === "content"
+            ? { ...newContentDraft(), value: it.text, caption: it.label ?? "" }
+            : {
+                ...newFieldDraft(),
+                type: it.type,
+                label: it.label,
+                options: it.options?.join(", ") ?? "",
+              },
+        ),
       ]);
     } catch {
       setGenError("네트워크 오류가 발생했어요.");
@@ -806,8 +823,9 @@ export function AppBuilder() {
                   🤖 자료로 문항 자동 생성
                 </span>
                 <p className="text-xs text-muted">
-                  문항의 근거가 될 자료를 고르면 AI가 문항 초안을 만들어 아래에 추가해요.
-                  이미지·PDF도 읽습니다. (추가 후 자유롭게 수정·삭제)
+                  문항의 근거가 될 자료를 고르면 AI가 문항 초안(+필요하면 &lt;보기&gt;
+                  같은 자료)을 만들어 아래에 추가해요. 이미지·PDF도 읽습니다. 아래
+                  &lsquo;추가 요청&rsquo;에 원하는 형식을 적을 수 있어요. (추가 후 자유롭게 수정·삭제)
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {drafts
@@ -827,6 +845,14 @@ export function AppBuilder() {
                       </label>
                     ))}
                 </div>
+                <textarea
+                  value={genInstruction}
+                  onChange={(e) => setGenInstruction(e.target.value)}
+                  rows={2}
+                  placeholder="추가 요청 (선택) — 예: <보기> ㄱ·ㄴ·ㄷ을 만들고, 그중 옳은 것을 있는 대로 고르는 객관식으로 출제해줘"
+                  maxLength={1000}
+                  className={inputClass + " resize-y text-xs"}
+                />
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-1 text-xs text-muted">
                     문항 수
@@ -836,6 +862,20 @@ export function AppBuilder() {
                       className="rounded-lg border border-border bg-card px-2 py-1 text-xs"
                     >
                       {[2, 3, 4, 5, 6, 8].map((n) => (
+                        <option key={n} value={n}>
+                          {n}개
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    객관식 선지
+                    <select
+                      value={genChoiceCount}
+                      onChange={(e) => setGenChoiceCount(Number(e.target.value))}
+                      className="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                    >
+                      {[3, 4, 5].map((n) => (
                         <option key={n} value={n}>
                           {n}개
                         </option>
