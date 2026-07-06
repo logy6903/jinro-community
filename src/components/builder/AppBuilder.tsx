@@ -158,6 +158,13 @@ export function AppBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
+  // 🤖 자료 → 문항 자동 생성 (제작 단계 AI, 앱당 1회)
+  const [genSelected, setGenSelected] = useState<Set<string>>(new Set());
+  const [genCount, setGenCount] = useState(4);
+  const [genModel, setGenModel] = useState<AiModelTier>("fast");
+  const [genBusy, setGenBusy] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
   const loadApps = useCallback(async () => {
     if (!user) return;
     setLoadingApps(true);
@@ -220,6 +227,74 @@ export function AppBuilder() {
         d.key === key && d.ai ? { ...d, ai: { ...d.ai, ...patch } } : d,
       ),
     );
+  }
+
+  function toggleGen(key: string) {
+    setGenSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Send the selected 제시 자료 to the AI and append the returned questions as
+  // editable field drafts. Draft-stage AI — one call per app, teacher-side.
+  async function onGenerateQuestions() {
+    if (genBusy || !user) return;
+    const chosen = drafts.filter(
+      (d) => d.kind === "content" && genSelected.has(d.key) && d.value.trim(),
+    );
+    if (chosen.length === 0) {
+      setGenError("문항의 근거가 될 자료를 하나 이상 선택하세요.");
+      return;
+    }
+    setGenBusy(true);
+    setGenError(null);
+    try {
+      const token = await user.getIdToken();
+      const materials = chosen.map((d) => ({
+        contentType: d.contentType,
+        value: d.value.trim(),
+        label: d.caption.trim() || undefined,
+      }));
+      const res = await fetch("/api/builder/generate-questions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ materials, count: genCount, model: genModel }),
+      });
+      if (res.status === 503) {
+        setGenError("AI가 설정되지 않았어요 (.env.local 의 ANTHROPIC_API_KEY 확인).");
+        return;
+      }
+      if (!res.ok) {
+        setGenError("문항 생성에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      const data = (await res.json()) as {
+        questions: { type: FieldType; label: string; options?: string[] }[];
+      };
+      if (data.questions.length === 0) {
+        setGenError("문항을 만들지 못했어요. 자료 내용을 확인해 주세요.");
+        return;
+      }
+      setDrafts((ds) => [
+        ...ds,
+        ...data.questions.map((q) => ({
+          ...newFieldDraft(),
+          type: q.type,
+          label: q.label,
+          options: q.options?.join(", ") ?? "",
+        })),
+      ]);
+    } catch {
+      setGenError("네트워크 오류가 발생했어요.");
+    } finally {
+      setGenBusy(false);
+    }
   }
 
   async function onCreate(e: React.FormEvent) {
@@ -724,6 +799,72 @@ export function AppBuilder() {
                 + 문항
               </button>
             </div>
+
+            {drafts.some((d) => d.kind === "content" && d.value.trim()) && (
+              <div className="flex flex-col gap-2 rounded-xl border border-brand/40 bg-brand-soft p-3">
+                <span className="text-xs font-semibold text-brand">
+                  🤖 자료로 문항 자동 생성
+                </span>
+                <p className="text-xs text-muted">
+                  문항의 근거가 될 자료를 고르면 AI가 문항 초안을 만들어 아래에 추가해요.
+                  이미지·PDF도 읽습니다. (추가 후 자유롭게 수정·삭제)
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {drafts
+                    .filter((d) => d.kind === "content" && d.value.trim())
+                    .map((d, idx) => (
+                      <label
+                        key={d.key}
+                        className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={genSelected.has(d.key)}
+                          onChange={() => toggleGen(d.key)}
+                        />
+                        {d.caption.trim() ||
+                          `${CONTENT_TYPE_LABEL[d.contentType]} 자료 ${idx + 1}`}
+                      </label>
+                    ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    문항 수
+                    <select
+                      value={genCount}
+                      onChange={(e) => setGenCount(Number(e.target.value))}
+                      className="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                    >
+                      {[2, 3, 4, 5, 6, 8].map((n) => (
+                        <option key={n} value={n}>
+                          {n}개
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    품질
+                    <select
+                      value={genModel}
+                      onChange={(e) => setGenModel(e.target.value as AiModelTier)}
+                      className="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                    >
+                      <option value="fast">간단 (무료·빠름)</option>
+                      <option value="smart">정밀 (고품질)</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void onGenerateQuestions()}
+                    disabled={genBusy || genSelected.size === 0}
+                    className="rounded-full bg-brand px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {genBusy ? "생성 중…" : "🤖 문항 생성"}
+                  </button>
+                </div>
+                {genError && <p className="text-xs text-red-600">{genError}</p>}
+              </div>
+            )}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
