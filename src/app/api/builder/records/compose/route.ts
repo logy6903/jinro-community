@@ -1,4 +1,5 @@
 import { verifyRequestUser } from "@/lib/builder/auth";
+import { hasTeacherProfile } from "@/lib/builder/teacherProfile";
 import { weaveRecords, type WeaveInput } from "@/lib/builder/records";
 
 // POST /api/builder/records/compose — 생기부 phase 2.
@@ -38,6 +39,9 @@ function sanitize(raw: unknown): WeaveInput[] {
 export async function POST(req: Request) {
   const user = await verifyRequestUser(req);
   if (!user) return Response.json({ error: "auth_required" }, { status: 401 });
+  if (!(await hasTeacherProfile(user.uid))) {
+    return Response.json({ error: "profile_required" }, { status: 403 });
+  }
 
   const body = (await req.json().catch(() => null)) as {
     students?: unknown;

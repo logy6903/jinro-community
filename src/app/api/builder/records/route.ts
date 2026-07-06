@@ -1,5 +1,6 @@
 import { getAppById, listSubmissions } from "@/lib/builder/repository";
 import { verifyRequestUser } from "@/lib/builder/auth";
+import { hasTeacherProfile } from "@/lib/builder/teacherProfile";
 import { fillAiSlots, type StudentActivity } from "@/lib/builder/records";
 import type { RecordSlot } from "@/lib/builder/types";
 
@@ -35,6 +36,9 @@ function sanitizeAiSlots(raw: unknown): RecordSlot[] {
 export async function POST(req: Request) {
   const user = await verifyRequestUser(req);
   if (!user) return Response.json({ error: "auth_required" }, { status: 401 });
+  if (!(await hasTeacherProfile(user.uid))) {
+    return Response.json({ error: "profile_required" }, { status: 403 });
+  }
 
   const body = (await req.json().catch(() => null)) as {
     appIds?: unknown;

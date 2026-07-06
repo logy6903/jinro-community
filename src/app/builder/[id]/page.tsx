@@ -1,7 +1,8 @@
 import { AppDashboard } from "@/components/builder/AppDashboard";
+import { TeacherGate } from "@/components/builder/TeacherGate";
 
 // Teacher dashboard for one app: share link + collected submissions.
-// Owner-gated inside the client component (authenticated fetch).
+// Gated by TeacherGate (sign-in → 교사 프로필); dashboard also owner-checks.
 
 export default async function BuilderAppPage({
   params,
@@ -9,5 +10,9 @@ export default async function BuilderAppPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <AppDashboard appId={id} />;
+  return (
+    <TeacherGate>
+      <AppDashboard appId={id} />
+    </TeacherGate>
+  );
 }

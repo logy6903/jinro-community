@@ -174,3 +174,39 @@ export interface RosterInput {
   school: string;
   students: RosterStudent[];
 }
+
+/**
+ * A teacher profile (one doc in `builder_teachers`, keyed by Firebase uid).
+ * Google sign-in can't verify that someone is actually a 진로교사, so this is a
+ * self-declared onboarding gate: a teacher must supply their school and role
+ * before using the builder. It's a soft gate (info capture + friction), not
+ * hard credential verification — that's a later, larger piece.
+ */
+export type TeacherRole =
+  | "career_lead" // 진로전담교사
+  | "subject" // 진로담당(교과)
+  | "homeroom" // 담임
+  | "admin" // 관리자/부장
+  | "other"; // 기타
+
+export interface TeacherProfile {
+  uid: string;
+  name: string;
+  /** 소속학교 — required. */
+  school: string;
+  /** 시도(교육청)/지역. */
+  region: string;
+  role: TeacherRole;
+  /** Optional contact (학교 이메일/전화). */
+  contact: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeacherProfileInput {
+  name: string;
+  school: string;
+  region: string;
+  role: TeacherRole;
+  contact: string;
+}
