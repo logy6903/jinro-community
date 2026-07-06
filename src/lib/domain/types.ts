@@ -164,6 +164,36 @@ export interface Dataset extends DatasetEnvelope {
   createdAt: string;
 }
 
+// ── 진로 일정표 ─────────────────────────────────────────────
+// 두 축 중 "일정표": 화면 캘린더로 한눈에. 공용 일정(I&AI 기본, academicCalendar에서
+// 파생)이 자동으로 깔리고, 그 위에 교사가 학교 일정을 얹는다. 진로교사는 학교당 1명
+// 이라 교사별 소유 = 그 학교 일정 (학교 그룹핑 불필요). 각 일정은 수업 힌트를 단다.
+
+export type ScheduleOrigin = "common" | "teacher";
+
+export interface ScheduleItem {
+  id: string;
+  level: DatasetLevel; // middle | high | both
+  title: string;
+  /** 툴팁용 수업 힌트 ("이 시기엔 ~수업 필요"). */
+  hint: string;
+  /** 적용 기간 (MM-DD). 단일일은 start==end. 연말 넘김 허용(start>end). */
+  start: string;
+  end: string;
+  origin: ScheduleOrigin;
+  /** teacher origin일 때 소유 교사. */
+  authorUid?: string;
+}
+
+/** 교사가 학교 일정을 추가할 때 보내는 입력. */
+export interface ScheduleInput {
+  level: DatasetLevel;
+  title: string;
+  hint: string;
+  start: string; // MM-DD
+  end: string; // MM-DD
+}
+
 // ── 정보 아이템(생성 정보의 통합 노출 단위) ──────────────────────
 // kakao-daily가 만든 자료(원문/소식/해설/데이터)를 정보 페이지에서
 // 6축 facet으로 필터 브라우징하기 위한 모델. 구분(category)과 학교급

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 // Grounded chatbot UI. Each question is answered from the teacher-uploaded
 // datasets, with sources. Stateless per question (MVP) — grounded Q&A doesn't
@@ -19,21 +20,31 @@ const EXAMPLES = [
 ];
 
 export default function ChatPage() {
+  const { user, signInWithGoogle } = useAuth();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const listEnd = useRef<HTMLDivElement>(null);
 
   async function ask(question: string) {
+    if (busy) return;
+    if (!user) {
+      await signInWithGoogle(); // 챗봇은 로그인 필요 (비용 게이트)
+      return;
+    }
     const q = question.trim();
-    if (!q || busy) return;
+    if (!q) return;
     setInput("");
     setTurns((t) => [...t, { role: "user", text: q }]);
     setBusy(true);
     try {
+      const token = await user.getIdToken();
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ question: q }),
       });
       const data = (await res.json()) as {
@@ -130,10 +141,10 @@ export default function ChatPage() {
         />
         <button
           type="submit"
-          disabled={busy || !input.trim()}
+          disabled={busy || (!!user && !input.trim())}
           className="rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          질문
+          {user ? "질문" : "로그인"}
         </button>
       </form>
     </div>

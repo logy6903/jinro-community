@@ -1,10 +1,32 @@
 import { ask } from "@/lib/chat/answer";
+import { getAdminAuth } from "@/lib/firebase/admin";
 
 // POST /api/chat — grounded Q&A over teacher-uploaded datasets.
-// Public (reads only public data). Cost note: unauthenticated + LLM-backed, so
-// a rate limit / auth gate is a near-term follow-up before wide release.
+// LOGIN REQUIRED: this endpoint calls Claude (paid), so an anonymous public
+// endpoint is a cost-abuse vector. Verify a Firebase ID token before answering.
+// Reading the underlying data stays public; only the LLM call is gated.
+
+async function requireUid(req: Request): Promise<string | null> {
+  const header = req.headers.get("authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
+  const auth = getAdminAuth();
+  if (!token || !auth) return null;
+  try {
+    return (await auth.verifyIdToken(token)).uid;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
+  const uid = await requireUid(req);
+  if (!uid) {
+    return Response.json(
+      { error: "auth_required", answer: "챗봇은 로그인 후 이용할 수 있어요.", sources: [] },
+      { status: 401 },
+    );
+  }
+
   const body = (await req.json().catch(() => null)) as { question?: unknown } | null;
   const question =
     typeof body?.question === "string" ? body.question.trim().slice(0, 500) : "";

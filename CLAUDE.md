@@ -110,6 +110,9 @@ src/
     datasets/[id]/page.tsx  # 데이터셋 상세 (봉투 + 표)
     datasets/new/page.tsx   # 엑셀 업로드 (로그인 교사, 브라우저 SheetJS 파싱)
     chat/page.tsx           # 자료 챗봇 UI (근거 기반 Q&A, 공개)
+    schedule/page.tsx       # 진로 일정표 캘린더 (공용 자동 + 교사 학교일정, 중/고, 힌트)
+    today/page.tsx          # 오늘의 수업 (오늘 시기+힌트 즉시 + 버튼으로 수업 초안 생성)
+    api/today/route.ts      # 오늘 수업 초안 생성 POST (Claude, 온디맨드)
     api/feed/route.ts       # kakao-daily 연동용 읽기 피드
     api/datasets/route.ts   # 데이터셋 작성 POST (토큰 검증, 봉투+행 저장)
     api/chat/route.ts       # RAG 챗봇 POST (검색→Claude, ANTHROPIC_API_KEY 필요)
@@ -132,6 +135,9 @@ src/
     datasets/repository.ts  # datasets(봉투+rowsJson) 생성/목록/조회 + 엑셀 검증 상한
     chat/retrieve.ts        # RAG 검색 (봉투/열 키워드 2단 라우팅, 임베딩 無)
     chat/answer.ts          # Claude(Haiku) 근거 답변·출처 인용 (키 없으면 폴백)
+    schedule/common.ts      # 공용 일정 = academicCalendar 파생 (정적, 클라 import)
+    schedule/repository.ts  # 교사 학교일정 CRUD (schedule_items, 교사별 소유)
+    today/generate.ts       # 오늘 시기(달력)+활동카드 근거 → Claude 수업 초안 생성
     firebase/admin.ts       # 서버 admin SDK (Firestore + Auth, service-account.json)
     firebase/client.ts      # 브라우저 SDK (NEXT_PUBLIC, 없으면 비활성)
     auth/AuthProvider.tsx   # 클라이언트 Auth 컨텍스트 (Google 로그인)

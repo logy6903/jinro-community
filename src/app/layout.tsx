@@ -29,8 +29,20 @@ export default function RootLayout({
                   <span className="text-xs text-muted">베타</span>
                 </Link>
                 <Link
-                  href="/chat"
+                  href="/today"
                   className="text-sm font-medium text-brand hover:opacity-80"
+                >
+                  오늘 수업
+                </Link>
+                <Link
+                  href="/schedule"
+                  className="text-sm text-muted hover:text-foreground"
+                >
+                  일정표
+                </Link>
+                <Link
+                  href="/chat"
+                  className="text-sm text-muted hover:text-foreground"
                 >
                   챗봇
                 </Link>
