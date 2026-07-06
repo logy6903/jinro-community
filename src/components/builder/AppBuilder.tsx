@@ -823,8 +823,9 @@ export function AppBuilder() {
                   🤖 자료로 문항 자동 생성
                 </span>
                 <p className="text-xs text-muted">
-                  문항의 근거가 될 자료를 고르면 AI가 문항 초안(+필요하면 &lt;보기&gt;
-                  같은 자료)을 만들어 아래에 추가해요. 이미지·PDF도 읽습니다. 아래
+                  고른 자료를 AI가 분석해 <b>그 자료 안에서만</b> 문항을 출제해요
+                  (외부 지식·추측 없음). 이미지·PDF는 물론 <b>유튜브도 자막을 읽어</b>
+                  분석합니다. 필요하면 &lt;보기&gt; 같은 자료도 만들고, 아래
                   &lsquo;추가 요청&rsquo;에 원하는 형식을 적을 수 있어요. (추가 후 자유롭게 수정·삭제)
                 </p>
                 <div className="flex flex-wrap gap-2">

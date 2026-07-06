@@ -64,6 +64,70 @@ async function fetchAsBase64(
   }
 }
 
+function youTubeId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/watch\?[^#]*\bv=([\w-]{11})/,
+    /youtu\.be\/([\w-]{11})/,
+    /youtube\.com\/(?:embed|shorts|live)\/([\w-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// Best-effort YouTube transcript so the AI can actually ground questions in the
+// video, not just its title. Pulls captionTracks from the watch page, prefers
+// Korean, fetches the json3 caption feed. Returns "" transcript when a video has
+// no captions (grounding then forbids inventing questions about it).
+async function fetchYouTube(
+  url: string,
+): Promise<{ title: string; transcript: string } | null> {
+  const id = youTubeId(url);
+  if (!id) return null;
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=ko`, {
+      headers: {
+        "Accept-Language": "ko,en;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const titleMatch = html.match(/<title>([^<]*)<\/title>/);
+    const title = titleMatch
+      ? titleMatch[1].replace(/\s*-\s*YouTube\s*$/, "").trim()
+      : "";
+    const tracksMatch = html.match(/"captionTracks":(\[.*?\])/);
+    if (!tracksMatch) return { title, transcript: "" };
+    let tracks: Array<{ baseUrl?: string; languageCode?: string }>;
+    try {
+      tracks = JSON.parse(tracksMatch[1]);
+    } catch {
+      return { title, transcript: "" };
+    }
+    const track = tracks.find((t) => t.languageCode === "ko") ?? tracks[0];
+    if (!track?.baseUrl) return { title, transcript: "" };
+    const capRes = await fetch(`${track.baseUrl}&fmt=json3`);
+    if (!capRes.ok) return { title, transcript: "" };
+    const cap = (await capRes.json()) as {
+      events?: Array<{ segs?: Array<{ utf8?: string }> }>;
+    };
+    const transcript = (cap.events ?? [])
+      .flatMap((e) => e.segs ?? [])
+      .map((s) => s.utf8 ?? "")
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 8000);
+    return { title, transcript };
+  } catch {
+    return null;
+  }
+}
+
 // Build the multimodal user content: an intro, each material as the right block,
 // then the output instruction. Unreadable assets degrade to a text note.
 async function buildContent(
@@ -82,10 +146,23 @@ async function buildContent(
     if (m.contentType === "text") {
       content.push({ type: "text", text: `${caption}\n${m.value}` });
     } else if (m.contentType === "link") {
-      content.push({
-        type: "text",
-        text: `${caption} (링크: ${m.value})\n※ 링크(영상 등)의 내부 내용은 직접 볼 수 없으니 제목·주제를 참고해 일반적인 문항을 만드세요.`,
-      });
+      const yt = await fetchYouTube(m.value);
+      if (yt && yt.transcript) {
+        content.push({
+          type: "text",
+          text: `${caption} (유튜브 영상 대본)\n제목: ${yt.title}\n${yt.transcript}`,
+        });
+      } else if (yt) {
+        content.push({
+          type: "text",
+          text: `${caption} (유튜브: ${yt.title || m.value})\n※ 자막이 없어 영상 내용을 읽지 못했습니다. 이 영상 내용에 대한 문항은 만들지 마세요.`,
+        });
+      } else {
+        content.push({
+          type: "text",
+          text: `${caption} (링크: ${m.value})\n※ 내용을 읽지 못했습니다. 이 링크 내용에 대한 문항은 만들지 마세요.`,
+        });
+      }
     } else if (m.contentType === "image") {
       const fetched = await fetchAsBase64(m.value);
       if (fetched && (IMAGE_TYPES as readonly string[]).includes(fetched.mediaType)) {
@@ -122,10 +199,11 @@ async function buildContent(
   content.push({
     type: "text",
     text:
-      `위 자료를 바탕으로 학생 활동을 만들어 주세요. 출력은 오직 JSON 배열이며, 순서가 있는 항목들입니다. 각 항목은 둘 중 하나입니다.\n` +
+      `오직 위에 제시된 자료 안의 내용만 근거로 학생 활동을 만들어 주세요. 자료에 없는 내용·배경지식·추측은 절대 넣지 마세요. 학생이 이 자료만 보고 풀 수 있어야 합니다.\n` +
+      `출력은 오직 JSON 배열이며, 순서가 있는 항목들입니다. 각 항목은 둘 중 하나입니다.\n` +
       `1) 제시·보기 블록: {"kind":"content","label":"보기","text":"내용"} — 문항이 참조할 <보기>·지문·표 등 학생에게 보여줄 자료. 필요할 때만, 해당 문항 바로 앞에 배치하세요.\n` +
       `2) 문항: {"kind":"field","type":"short"|"long"|"choice","label":"문항 텍스트","options":["보기1","보기2"]} — options는 type이 choice일 때만.\n` +
-      `문항은 총 ${opts.count}개 만드세요. 객관식(choice) 문항의 선지(options)는 정확히 ${opts.choiceCount}개로 만드세요. 단답은 short, 서술형은 long입니다.\n` +
+      `문항은 자료로 확실히 낼 수 있는 범위에서 최대 ${opts.count}개까지 만드세요(자료가 부족하면 더 적게, 지어내지 말 것). 객관식(choice) 문항의 선지(options)는 정확히 ${opts.choiceCount}개로 만드세요. 단답은 short, 서술형은 long입니다.\n` +
       `<보기>에서 옳은 것을 고르는 유형이면, 먼저 kind:content로 <보기>(예: ㄱ,ㄴ,ㄷ 항목)를 만들고, 이어서 그 보기를 참조하는 kind:choice 문항을 두세요.\n` +
       `자료 이해·적용·자기생각을 고루 섞고, 정답은 쓰지 마세요. JSON 외의 설명은 절대 붙이지 마세요.` +
       extra,
@@ -135,9 +213,10 @@ async function buildContent(
 }
 
 const SYSTEM = [
-  "너는 교사의 수업 자료를 읽고 학생용 활동(제시 블록 + 문항)을 설계하는 조력자다.",
-  "규칙: 한국어로, 학생 수준에 맞게, 자료에 근거해 만든다. 정답은 쓰지 않는다.",
-  "교사의 추가 요청이 있으면 최우선으로 반영한다. 반드시 JSON 배열만 출력한다.",
+  "너는 교사가 올린 수업 자료를 분석해, 오직 그 자료 안의 정보만으로 학생 활동(제시 블록 + 문항)을 설계하는 조력자다.",
+  "절대 규칙: 제시된 자료 안에 실제로 있는 내용으로만 문항·보기·선지를 만든다. 자료에 없는 배경지식·상식·외부 정보·추측은 절대 쓰지 않는다.",
+  "학생이 그 자료만 보고 답할 수 있어야 한다. 자료가 부실해 근거 있는 문항을 만들 수 없으면, 문항 수를 줄이거나 만들지 않는다(억지로 지어내지 않는다).",
+  "교사의 추가 요청은 자료 범위 안에서 반영한다. 정답은 쓰지 않는다. 한국어로, 반드시 JSON 배열만 출력한다.",
 ].join("\n");
 
 function parseItems(raw: string, choiceCount: number): GeneratedItem[] {
