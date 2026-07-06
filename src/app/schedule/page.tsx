@@ -6,8 +6,9 @@ import { commonScheduleItems } from "@/lib/schedule/common";
 import type { DatasetLevel, ScheduleItem } from "@/lib/domain/types";
 import { DATASET_LEVEL_LABEL } from "@/lib/domain/labels";
 
-// 일정표 (Track 1). 공용 일정(academicCalendar 파생)이 자동으로 깔리고, 로그인 교사가
-// 학교 일정을 얹는다. 각 일정에 수업 힌트. 열람은 공개, 추가는 로그인.
+// 일정표 (Track 1). 공용 일정(academicCalendar 파생) 자동 + 로그인 교사가 학교 일정을
+// 얹는다. 추가 UX: 캘린더의 날짜를 클릭(또는 우클릭)하면 그 날짜 팝업이 떠서 그 날의
+// 일정을 보고 바로 추가한다.
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -15,6 +16,9 @@ const TOGGLE_LEVELS: ("middle" | "high")[] = ["middle", "high"];
 
 function parseMD(s: string): number {
   return Number(s.slice(0, 2)) * 100 + Number(s.slice(3, 5));
+}
+function mdOf(month1: number, day: number): string {
+  return `${String(month1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 function covers(item: ScheduleItem, month1: number, day: number): boolean {
   const key = month1 * 100 + day;
@@ -39,13 +43,14 @@ function fmtMD(s: string): string {
 }
 
 const inputClass =
-  "rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand";
+  "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand";
 
 export default function SchedulePage() {
   const { user } = useAuth();
   const [month, setMonth] = useState(() => new Date().getMonth()); // 0-11
   const [level, setLevel] = useState<"middle" | "high">("middle");
   const [teacherItems, setTeacherItems] = useState<ScheduleItem[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const common = useMemo(() => commonScheduleItems(), []);
 
@@ -96,13 +101,17 @@ export default function SchedulePage() {
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
+  function openDay(day: number) {
+    setSelectedDay(day);
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-bold">진로 일정표</h1>
         <p className="text-sm text-muted">
-          공용 진로 일정이 기본으로 깔려요. 로그인하면 우리 학교 일정을 얹을 수
-          있습니다.
+          공용 진로 일정이 기본으로 깔려요. <b>날짜를 클릭</b>하면 그 날 일정을 보고,
+          로그인하면 우리 학교 일정을 추가할 수 있습니다.
         </p>
       </div>
 
@@ -113,7 +122,10 @@ export default function SchedulePage() {
             <button
               key={l}
               type="button"
-              onClick={() => setLevel(l)}
+              onClick={() => {
+                setLevel(l);
+                setSelectedDay(null);
+              }}
               className={
                 "rounded-full px-4 py-1.5 text-sm font-medium transition-colors " +
                 (l === level ? "bg-brand text-white" : "text-muted")
@@ -126,7 +138,10 @@ export default function SchedulePage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setMonth((m) => (m + 11) % 12)}
+            onClick={() => {
+              setMonth((m) => (m + 11) % 12);
+              setSelectedDay(null);
+            }}
             className="rounded-full border border-border px-2.5 py-1 text-sm hover:border-brand"
             aria-label="이전 달"
           >
@@ -135,7 +150,10 @@ export default function SchedulePage() {
           <span className="text-base font-semibold">{MONTHS[month]}</span>
           <button
             type="button"
-            onClick={() => setMonth((m) => (m + 1) % 12)}
+            onClick={() => {
+              setMonth((m) => (m + 1) % 12);
+              setSelectedDay(null);
+            }}
             className="rounded-full border border-border px-2.5 py-1 text-sm hover:border-brand"
             aria-label="다음 달"
           >
@@ -144,17 +162,23 @@ export default function SchedulePage() {
         </div>
         <div className="flex gap-3 text-xs text-muted">
           <span>
-            <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: "#9FE1CB" }} />
+            <span
+              className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle"
+              style={{ background: "#9FE1CB" }}
+            />
             공용
           </span>
           <span>
-            <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: "#FAC775" }} />
+            <span
+              className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle"
+              style={{ background: "#FAC775" }}
+            />
             우리 학교
           </span>
         </div>
       </div>
 
-      {/* 캘린더 그리드 */}
+      {/* 캘린더 그리드 (날짜 클릭/우클릭 → 팝업) */}
       <div className="overflow-hidden rounded-2xl border border-border">
         <div className="grid grid-cols-7 bg-brand-soft">
           {DOW.map((d, i) => (
@@ -170,7 +194,9 @@ export default function SchedulePage() {
         <div className="grid grid-cols-7">
           {cells.map((day, idx) => {
             if (day === null)
-              return <div key={idx} className="min-h-[52px] border-t border-border" />;
+              return (
+                <div key={idx} className="min-h-[52px] border-t border-border" />
+              );
             const dayItems = items.filter((i) => covers(i, month1, day));
             const hasTeacher = dayItems.some((i) => i.origin === "teacher");
             const hasCommon = dayItems.some((i) => i.origin === "common");
@@ -180,9 +206,16 @@ export default function SchedulePage() {
               (i) => parseMD(i.start) === month1 * 100 + day,
             );
             return (
-              <div
+              <button
                 key={idx}
-                className="min-h-[52px] border-t border-border px-1.5 py-1"
+                type="button"
+                onClick={() => openDay(day)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  openDay(day);
+                }}
+                title="클릭해서 일정 보기·추가"
+                className="min-h-[52px] cursor-pointer border-t border-border px-1.5 py-1 text-left transition-shadow hover:ring-1 hover:ring-brand/40"
                 style={{ background: bg }}
               >
                 <div className="text-xs" style={{ color: fg }}>
@@ -192,16 +225,19 @@ export default function SchedulePage() {
                   <div
                     className="mt-0.5 truncate text-[10px] font-medium leading-tight"
                     style={{ color: fg }}
-                    title={startItem.title}
                   >
                     {startItem.title}
                   </div>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
+
+      <p className="text-xs text-muted">
+        날짜를 클릭(또는 우클릭)하면 그 날 일정을 보고 추가할 수 있어요.
+      </p>
 
       {/* 이 달의 일정 + 힌트 */}
       <div className="flex flex-col gap-2">
@@ -210,10 +246,7 @@ export default function SchedulePage() {
         </h2>
         {monthItems.length > 0 ? (
           monthItems.map((it) => (
-            <div
-              key={it.id}
-              className="rounded-2xl border border-border bg-card p-4"
-            >
+            <div key={it.id} className="rounded-2xl border border-border bg-card p-4">
               <div className="mb-1 flex items-center gap-2 text-xs">
                 <span
                   className="rounded-full px-2 py-0.5 font-medium"
@@ -229,85 +262,59 @@ export default function SchedulePage() {
                   {fmtMD(it.start)}
                   {it.end !== it.start && `~${fmtMD(it.end)}`}
                 </span>
-                {it.origin === "teacher" && user && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const token = await user.getIdToken();
-                      await fetch(`/api/schedule?id=${it.id}`, {
-                        method: "DELETE",
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
-                      void refreshTeacher();
-                    }}
-                    className="ml-auto text-muted hover:text-red-600"
-                  >
-                    삭제
-                  </button>
-                )}
               </div>
               <p className="text-sm font-semibold">{it.title}</p>
               {it.hint && (
-                <p className="mt-1 text-sm leading-relaxed text-muted">
-                  💡 {it.hint}
-                </p>
+                <p className="mt-1 text-sm leading-relaxed text-muted">💡 {it.hint}</p>
               )}
             </div>
           ))
         ) : (
           <p className="rounded-2xl border border-dashed border-border px-5 py-6 text-center text-sm text-muted">
-            이 달 일정이 없어요.
+            이 달 일정이 없어요. 날짜를 클릭해 추가해보세요.
           </p>
         )}
       </div>
 
-      <AddScheduleForm defaultLevel={level} onAdded={refreshTeacher} />
+      {selectedDay !== null && (
+        <DayPopup
+          month1={month1}
+          day={selectedDay}
+          dayItems={items.filter((i) => covers(i, month1, selectedDay))}
+          level={level}
+          onClose={() => setSelectedDay(null)}
+          onChanged={refreshTeacher}
+        />
+      )}
     </div>
   );
 }
 
-function AddScheduleForm({
-  defaultLevel,
-  onAdded,
+function DayPopup({
+  month1,
+  day,
+  dayItems,
+  level,
+  onClose,
+  onChanged,
 }: {
-  defaultLevel: "middle" | "high";
-  onAdded: () => void;
+  month1: number;
+  day: number;
+  dayItems: ScheduleItem[];
+  level: "middle" | "high";
+  onClose: () => void;
+  onChanged: () => void;
 }) {
   const { user, signInWithGoogle } = useAuth();
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [hint, setHint] = useState("");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [multi, setMulti] = useState(false);
+  const [end, setEnd] = useState(""); // YYYY-MM-DD
   const [busy, setBusy] = useState(false);
+  const start = mdOf(month1, day);
 
-  if (!user) {
-    return (
-      <button
-        type="button"
-        onClick={() => void signInWithGoogle()}
-        className="self-start rounded-full border border-border px-4 py-2 text-sm text-muted hover:border-brand"
-      >
-        로그인하고 우리 학교 일정 추가
-      </button>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start rounded-full border border-border px-4 py-2 text-sm text-brand hover:border-brand"
-      >
-        + 우리 학교 일정 추가
-      </button>
-    );
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy || !user || !title.trim() || !start) return;
+  async function add() {
+    if (!user || busy || !title.trim()) return;
     setBusy(true);
     try {
       const token = await user.getIdToken();
@@ -318,86 +325,146 @@ function AddScheduleForm({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          level: defaultLevel,
+          level,
           title,
           hint,
-          start: start.slice(5), // YYYY-MM-DD → MM-DD
-          end: (end || start).slice(5),
+          start,
+          end: multi && end ? end.slice(5) : start,
         }),
       });
       if (res.ok) {
         setTitle("");
         setHint("");
-        setStart("");
-        setEnd("");
-        setOpen(false);
-        onAdded();
+        onChanged();
+        onClose();
       }
     } finally {
       setBusy(false);
     }
   }
 
+  async function del(id: string) {
+    if (!user) return;
+    const token = await user.getIdToken();
+    await fetch(`/api/schedule?id=${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    onChanged();
+    onClose();
+  }
+
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4"
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
     >
-      <p className="text-sm font-medium">
-        우리 학교 일정 추가 · {DATASET_LEVEL_LABEL[defaultLevel]}
-      </p>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="일정 제목 (예: 1학기 중간고사)"
-        maxLength={120}
-        required
-        className={inputClass}
-      />
-      <input
-        value={hint}
-        onChange={(e) => setHint(e.target.value)}
-        placeholder="수업 힌트 (예: 시험 전 진로수업은 가볍게)"
-        maxLength={300}
-        className={inputClass}
-      />
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <label className="flex items-center gap-1">
-          <span className="text-muted">시작</span>
-          <input
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            required
-            className={inputClass}
-          />
-        </label>
-        <label className="flex items-center gap-1">
-          <span className="text-muted">종료(선택)</span>
-          <input
-            type="date"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-            className={inputClass}
-          />
-        </label>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[85vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-2xl bg-card p-5 shadow-xl"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold">
+            {month1}월 {day}일
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-muted hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+
+        {dayItems.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {dayItems.map((it) => (
+              <div key={it.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    className="rounded-full px-2 py-0.5 font-medium"
+                    style={
+                      it.origin === "teacher"
+                        ? { background: "#FAEEDA", color: "#854F0B" }
+                        : { background: "#E1F5EE", color: "#0F6E56" }
+                    }
+                  >
+                    {it.origin === "teacher" ? "우리 학교" : "공용"}
+                  </span>
+                  {it.origin === "teacher" && user && (
+                    <button
+                      type="button"
+                      onClick={() => void del(it.id)}
+                      className="ml-auto text-muted hover:text-red-600"
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-sm font-semibold">{it.title}</p>
+                {it.hint && (
+                  <p className="mt-0.5 text-xs text-muted">💡 {it.hint}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {user ? (
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <p className="text-sm font-medium">
+              이 날 일정 추가 · {DATASET_LEVEL_LABEL[level]}
+            </p>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="제목 (예: 1학기 중간고사)"
+              maxLength={120}
+              className={inputClass}
+            />
+            <input
+              value={hint}
+              onChange={(e) => setHint(e.target.value)}
+              placeholder="수업 힌트 (선택)"
+              maxLength={300}
+              className={inputClass}
+            />
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={multi}
+                onChange={(e) => setMulti(e.target.checked)}
+              />
+              여러 날 (종료일 지정)
+            </label>
+            {multi && (
+              <input
+                type="date"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+                className={inputClass}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => void add()}
+              disabled={busy || !title.trim()}
+              className="self-start rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "추가 중…" : "추가"}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void signInWithGoogle()}
+            className="self-start rounded-full border border-border px-4 py-2 text-sm text-muted hover:border-brand"
+          >
+            로그인하고 이 날 일정 추가
+          </button>
+        )}
       </div>
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={busy || !title.trim() || !start}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
-          {busy ? "추가 중…" : "추가"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="rounded-full border border-border px-4 py-2 text-sm text-muted"
-        >
-          취소
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthButton } from "@/components/AuthButton";
+import { HeaderNav } from "@/components/HeaderNav";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import "./globals.css";
 
@@ -21,55 +22,14 @@ export default function RootLayout({
         <AuthProvider>
           <header className="border-b border-border bg-card">
             <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
-              <div className="flex items-baseline gap-4">
-                <Link href="/" className="flex items-baseline gap-2">
+              <div className="flex items-center gap-4">
+                <Link href="/" className="flex shrink-0 items-baseline gap-2">
                   <span className="text-lg font-bold tracking-tight">
                     진로교사 커뮤니티
                   </span>
                   <span className="text-xs text-muted">베타</span>
                 </Link>
-                <Link
-                  href="/today"
-                  className="text-sm font-medium text-brand hover:opacity-80"
-                >
-                  오늘 수업
-                </Link>
-                <Link
-                  href="/schedule"
-                  className="text-sm text-muted hover:text-foreground"
-                >
-                  일정표
-                </Link>
-                <Link
-                  href="/chat"
-                  className="text-sm text-muted hover:text-foreground"
-                >
-                  챗봇
-                </Link>
-                <Link
-                  href="/datasets"
-                  className="text-sm text-muted hover:text-foreground"
-                >
-                  데이터
-                </Link>
-                <Link
-                  href="/board"
-                  className="text-sm text-muted hover:text-foreground"
-                >
-                  자료 공유
-                </Link>
-                <Link
-                  href="/info"
-                  className="text-sm text-muted hover:text-foreground"
-                >
-                  정보
-                </Link>
-                <Link
-                  href="/builder"
-                  className="text-sm text-muted hover:text-foreground"
-                >
-                  수업앱
-                </Link>
+                <HeaderNav />
               </div>
               <AuthButton />
             </div>
