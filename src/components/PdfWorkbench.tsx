@@ -321,7 +321,10 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
                           ✓ 저장됨
                         </span>
                       )}
-                      <span className="ml-auto text-[10px] text-muted">{t.page}p</span>
+                      <span className="ml-auto text-[10px] text-muted">
+                        {t.page}
+                        {t.endPage && t.endPage > t.page ? `~${t.endPage}` : ""}p
+                      </span>
                     </div>
                     <span className="text-xs leading-snug">{t.title}</span>
                   </button>

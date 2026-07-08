@@ -85,7 +85,11 @@ export function TableExtractPanel({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title: table.title, page: table.page }),
+        body: JSON.stringify({
+          title: table.title,
+          page: table.page,
+          endPage: table.endPage ?? table.page,
+        }),
       });
       if (!res.ok) {
         setError("표 추출에 실패했습니다. 다시 시도해주세요.");
@@ -169,7 +173,10 @@ export function TableExtractPanel({
           ← 목록
         </button>
         <span className="truncate text-sm font-medium">{table.title}</span>
-        <span className="ml-auto shrink-0 text-[10px] text-muted">{table.page}p</span>
+        <span className="ml-auto shrink-0 text-[10px] text-muted">
+          {table.page}
+          {table.endPage && table.endPage > table.page ? `~${table.endPage}` : ""}p
+        </span>
       </div>
 
       <div className="flex-1 overflow-auto p-3">

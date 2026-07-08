@@ -36,9 +36,10 @@ export function isConfigured(): boolean {
 
 const MAP_SYSTEM = [
   "너는 한국 대학 입시요강(요강) PDF를 분석한다. 본문/머리글/바닥글이 아니라 '표(table)'만 찾아 목록으로 만든다.",
-  "각 표에 대해: title(짧은 한국어 라벨), page(1부터), kind(모집인원/반영비율/최저기준/환산점수/일정/기타 중 추정), hasNotes(표에 딸리거나 아래에 ※·주)·각주 주석이 있으면 true), location(위치 힌트 예: '3페이지 상단').",
+  "각 표에 대해: title(짧은 한국어 라벨), page(표가 시작하는 1-based 페이지), endPage(표가 여러 페이지에 이어지면 마지막 페이지, 단일 페이지면 page와 동일), kind(모집인원/반영비율/최저기준/환산점수/일정/기타 중 추정), hasNotes(표에 딸리거나 아래에 ※·주)·각주 주석이 있으면 true), location(위치 힌트 예: '3페이지 상단').",
+  "표가 다음 장으로 이어지면(반복 헤더·(계속)·페이지 하단까지 찬 표가 다음 장 상단에 계속) 두 항목으로 쪼개지 말고 한 항목 + endPage로 범위를 잡는다. 단, 전형이 다른 별개 표는 각각 따로.",
   "이 단계는 '정확히 읽기'가 아니라 '어디에 표가 있나'만 파악하는 것이다. 표가 아닌 서술형 문단은 제외.",
-  "출력은 오직 JSON: {\"tables\":[{\"title\":\"\",\"page\":1,\"kind\":\"\",\"hasNotes\":false,\"location\":\"\"}],\"pageCount\":0}. 다른 말 금지.",
+  "출력은 오직 JSON: {\"tables\":[{\"title\":\"\",\"page\":1,\"endPage\":1,\"kind\":\"\",\"hasNotes\":false,\"location\":\"\"}],\"pageCount\":0}. 다른 말 금지.",
 ].join("\n");
 
 const EXTRACT_SYSTEM = [
@@ -110,10 +111,15 @@ export async function mapTables(pdfBase64: string): Promise<TableMap | null> {
       const o = (t ?? {}) as Record<string, unknown>;
       const kind = KINDS.includes(o.kind as TableKind) ? (o.kind as TableKind) : "기타";
       const page = Number(o.page);
+      const startPage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+      const rawEnd = Number(o.endPage);
+      const endPage =
+        Number.isFinite(rawEnd) && rawEnd >= startPage ? Math.floor(rawEnd) : startPage;
       return {
         id: `t${i}`,
         title: str(o.title, 120) || `표 ${i + 1}`,
-        page: Number.isFinite(page) && page > 0 ? Math.floor(page) : 1,
+        page: startPage,
+        endPage,
         kind,
         hasNotes: o.hasNotes === true,
         location: str(o.location, 60),

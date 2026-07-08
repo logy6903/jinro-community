@@ -21,8 +21,10 @@ export interface TableMapEntry {
   id: string;
   /** 짧은 한국어 라벨. */
   title: string;
-  /** 1-based 페이지. */
+  /** 1-based 시작 페이지. */
   page: number;
+  /** 여러 페이지에 걸친 표의 마지막 페이지. 단일 페이지면 생략(=page). */
+  endPage?: number;
   /** 성격 추정. */
   kind: TableKind;
   /** ※/주)/각주 등 표 바깥 주석이 딸려 있는가. */
