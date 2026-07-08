@@ -19,6 +19,7 @@ export function PdfBrowser({ sources }: { sources: PdfSource[] }) {
   const [year, setYear] = useState<string>(ALL);
   const [docType, setDocType] = useState<string>(ALL);
   const [ownership, setOwnership] = useState<string>(ALL);
+  const [area, setArea] = useState<string>(ALL);
   const [univ, setUniv] = useState<string>(ALL);
 
   const years = useMemo(
@@ -43,10 +44,11 @@ export function PdfBrowser({ sources }: { sources: PdfSource[] }) {
           const isPublic = s.univType === "국립" || s.univType === "공립";
           if (ownership === "국공립" ? !isPublic : s.univType !== ownership) return false;
         }
+        if (area !== ALL && (area === "수도권") !== s.isCapitalArea) return false;
         if (univ !== ALL && s.university !== univ) return false;
         return true;
       }),
-    [sources, year, docType, ownership, univ],
+    [sources, year, docType, ownership, area, univ],
   );
 
   return (
@@ -87,6 +89,11 @@ export function PdfBrowser({ sources }: { sources: PdfSource[] }) {
               {o}
             </option>
           ))}
+        </select>
+        <select value={area} onChange={(e) => setArea(e.target.value)} className={selectClass}>
+          <option value={ALL}>지역 전체</option>
+          <option value="수도권">수도권</option>
+          <option value="지방">지방</option>
         </select>
         <select value={univ} onChange={(e) => setUniv(e.target.value)} className={selectClass}>
           <option value={ALL}>대학 전체</option>
