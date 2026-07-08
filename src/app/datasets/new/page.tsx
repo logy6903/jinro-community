@@ -23,6 +23,19 @@ export default async function NewDatasetPage() {
         </p>
       </div>
 
+      <Link
+        href="/datasets/from-pdf"
+        className="flex items-center justify-between gap-2 rounded-2xl border border-brand/40 bg-brand-soft px-4 py-3 hover:bg-brand-soft/70"
+      >
+        <span className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium text-brand">요강 PDF에서 표 뽑기 (베타)</span>
+          <span className="text-xs text-muted">
+            엑셀이 없어도 요강 PDF를 올리면 AI가 표를 찾아 정리해줍니다.
+          </span>
+        </span>
+        <span className="shrink-0 text-brand">→</span>
+      </Link>
+
       <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
         <span className="text-sm font-medium">권장 템플릿 (선택)</span>
         <p className="text-xs text-muted">

@@ -96,6 +96,7 @@ export function HeaderNav() {
         accent
         items={[
           { href: "/datasets/new", label: "엑셀 데이터 올리기" },
+          { href: "/datasets/from-pdf", label: "요강 PDF에서 뽑기" },
           { href: "/board/new", label: "자료 공유 글쓰기" },
         ]}
       />
