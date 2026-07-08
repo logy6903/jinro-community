@@ -97,6 +97,7 @@ export function HeaderNav() {
         items={[
           { href: "/datasets/new", label: "엑셀 데이터 올리기" },
           { href: "/pdf", label: "요강 작업실 (PDF)" },
+          { href: "/naeshin", label: "내신 검수 (베타)" },
           { href: "/board/new", label: "자료 공유 글쓰기" },
         ]}
       />
