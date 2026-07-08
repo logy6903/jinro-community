@@ -6,6 +6,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type { PdfSource } from "@/lib/domain/types";
 import type { TableMapEntry } from "@/lib/extract/types";
+import { TableExtractPanel } from "./TableExtractPanel";
 
 // 전체화면 요강 작업대. 왼쪽 = 원본 PDF 페이지(pdf.js canvas 렌더, 동일출처
 // /api/pdf/[id]에서 로드 → CORS 무관), 오른쪽 = 표 추출 결과(다음 증분에서 채움).
@@ -31,7 +32,8 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
   const [tables, setTables] = useState<TableMapEntry[] | null>(null);
   const [mapping, setMapping] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [activeTable, setActiveTable] = useState<TableMapEntry | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   // 문서 1회 로드.
   useEffect(() => {
@@ -135,7 +137,7 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
   }
 
   function selectTable(t: TableMapEntry) {
-    setSelectedTableId(t.id);
+    setActiveTable(t);
     setPage(Math.max(1, Math.min(numPages || t.page, t.page)));
   }
 
@@ -238,12 +240,24 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
         </div>
 
         <aside className="flex w-96 shrink-0 flex-col overflow-hidden border-l border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <h2 className="text-sm font-semibold">표 목록</h2>
-            {tables && <span className="text-xs text-muted">{tables.length}개</span>}
-          </div>
+          {activeTable ? (
+            <TableExtractPanel
+              source={source}
+              table={activeTable}
+              onBack={() => setActiveTable(null)}
+              onSaved={(tableId) => {
+                setSavedIds((s) => new Set(s).add(tableId));
+                setActiveTable(null);
+              }}
+            />
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                <h2 className="text-sm font-semibold">표 목록</h2>
+                {tables && <span className="text-xs text-muted">{tables.length}개</span>}
+              </div>
 
-          <div className="flex-1 overflow-auto p-3">
+              <div className="flex-1 overflow-auto p-3">
             {!tables && !mapping && (
               <div className="flex flex-col gap-3">
                 <p className="text-xs leading-relaxed text-muted">
@@ -281,8 +295,8 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
                     onClick={() => selectTable(t)}
                     className={
                       "flex flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors " +
-                      (selectedTableId === t.id
-                        ? "border-brand bg-brand-soft"
+                      (savedIds.has(t.id)
+                        ? "border-brand/40 bg-brand-soft/50"
                         : "border-border hover:border-brand")
                     }
                   >
@@ -299,6 +313,14 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
                           ※
                         </span>
                       )}
+                      {savedIds.has(t.id) && (
+                        <span
+                          className="text-[10px] font-medium text-green-600"
+                          title="저장됨"
+                        >
+                          ✓ 저장됨
+                        </span>
+                      )}
                       <span className="ml-auto text-[10px] text-muted">{t.page}p</span>
                     </div>
                     <span className="text-xs leading-snug">{t.title}</span>
@@ -306,7 +328,9 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
                 ))}
               </div>
             )}
-          </div>
+              </div>
+            </>
+          )}
         </aside>
       </div>
     </div>
