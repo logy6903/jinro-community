@@ -42,6 +42,14 @@ export function NaeshinQA({
   const [subjects, setSubjects] = useState<TranscriptSubject[]>(SAMPLE);
   const [expected, setExpected] = useState("");
 
+  // 배치 검수: 골든 케이스 세트(성적표+기대점수)를 한 번에 돌린다.
+  interface GoldenCase {
+    label: string;
+    subjects: TranscriptSubject[];
+    expected: string;
+  }
+  const [cases, setCases] = useState<GoldenCase[]>([]);
+
   // 요강 추출 컨트롤
   const [srcId, setSrcId] = useState(sources[0]?.id ?? "");
   const [page, setPage] = useState("");
@@ -129,6 +137,31 @@ export function NaeshinQA({
   const addSub = () =>
     setSubjects((rs) => [...rs, { name: "", group: "A", grade: 1, units: 1 }]);
   const delSub = (i: number) => setSubjects((rs) => rs.filter((_, idx) => idx !== i));
+
+  // 배치 검수 핸들러 + 결과(오차 큰 순 정렬).
+  const addCase = () =>
+    setCases((cs) => [
+      ...cs,
+      { label: `케이스 ${cs.length + 1}`, subjects: structuredClone(subjects), expected },
+    ]);
+  const loadCase = (c: GoldenCase) => {
+    setSubjects(structuredClone(c.subjects));
+    setExpected(c.expected);
+  };
+  const removeCase = (i: number) => setCases((cs) => cs.filter((_, idx) => idx !== i));
+
+  const batch = useMemo(
+    () =>
+      cases
+        .map((c) => {
+          const total = computeNaeshin(spec, c.subjects).total;
+          const exp = c.expected.trim() === "" ? null : Number(c.expected);
+          const d = exp !== null && Number.isFinite(exp) ? total - exp : null;
+          return { c, total, exp, diff: d, ok: d !== null && Math.abs(d) < 0.1 };
+        })
+        .sort((a, b) => Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0)),
+    [cases, spec],
+  );
   const setScore = (gi: number, si: number, v: string) =>
     setSpec((s) => ({
       ...s,
@@ -269,7 +302,73 @@ export function NaeshinQA({
             {matched ? "✓ 일치" : `오차 ${fmt(diff)}`}
           </div>
         )}
+        <button
+          type="button"
+          onClick={addCase}
+          className="rounded-full border border-border px-3 py-1.5 text-xs text-brand hover:border-brand"
+        >
+          + 이 성적표를 케이스로
+        </button>
       </section>
+
+      {/* 배치 검수 (골든 케이스) */}
+      {cases.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted">
+            배치 검수 (골든 케이스 {cases.length}개)
+          </h2>
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-brand-soft text-xs text-brand">
+                <tr>
+                  <th className="px-3 py-1.5 text-left font-medium">케이스</th>
+                  <th className="px-3 py-1.5 text-right font-medium">기대</th>
+                  <th className="px-3 py-1.5 text-right font-medium">계산</th>
+                  <th className="px-3 py-1.5 text-right font-medium">차이</th>
+                  <th className="px-3 py-1.5 text-center font-medium">판정</th>
+                  <th className="px-3 py-1.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {batch.map((b, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="px-3 py-1.5">
+                      <button type="button" onClick={() => loadCase(b.c)} className="text-brand hover:underline">
+                        {b.c.label}
+                      </button>
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-muted">{b.exp ?? "-"}</td>
+                    <td className="px-3 py-1.5 text-right">{fmt(b.total)}</td>
+                    <td className="px-3 py-1.5 text-right">{b.diff === null ? "-" : fmt(b.diff)}</td>
+                    <td className="px-3 py-1.5 text-center">
+                      {b.diff === null ? (
+                        "—"
+                      ) : b.ok ? (
+                        <span className="text-green-600">✓</span>
+                      ) : (
+                        <span className="text-red-600">✗</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeCase(cases.indexOf(b.c))}
+                        aria-label="케이스 삭제"
+                        className="text-muted hover:text-red-600"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted">
+            케이스명을 눌러 편집기로 불러옵니다. 오차 큰 순으로 정렬돼요. (대학 예시·엣지케이스를 모아두면 회귀 검증)
+          </p>
+        </section>
+      )}
 
       {/* ② 트레이스 */}
       <section className="flex flex-col gap-2">
