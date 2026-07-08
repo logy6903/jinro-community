@@ -272,7 +272,9 @@ export interface InfoItem {
   timing: InfoTiming;
   title: string;
   summary: string;
-  /** 원문/상세 링크 (Drive 원문, 외부 URL, 또는 앱 내부 경로). */
+  /** 본문 전체 (해설·브리핑 등 텍스트 콘텐츠). 있으면 상세 페이지에서 렌더. */
+  body?: string;
+  /** 원문/상세 링크 (Drive 원문, 외부 URL). 텍스트 콘텐츠는 비고 body를 씀. */
   url: string;
   /** 발행일 ISO(YYYY-MM-DD). 사전식 정렬 = 시간순. */
   publishedAt: string;

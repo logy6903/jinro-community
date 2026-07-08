@@ -1,0 +1,53 @@
+{
+  "_schema": {
+    "note": "요강 원본의 연도 정밀 스키마. 학년도(admissionYear)와 수능 치르는 해(examYear)를 반드시 분리한다. examYear = admissionYear - 1.",
+    "fields": {
+      "university": "대학명",
+      "univType": "국립 | 공립 | 사립  (국공립 필터용)",
+      "region": "소재 지역 (수도권 여부 판단)",
+      "isCapitalArea": "수도권 여부 boolean",
+      "docType": "수시모집요강 | 정시모집요강 | 전형시행계획 | 선행학습영향평가보고서 | 대학별고사자료",
+      "admissionYear": "학년도 (공식 라벨, 예: 2026)",
+      "examYear": "수능 치르는 해 = admissionYear - 1 (예: 2025)",
+      "targetGrade": "대상 학생 (사람이 읽기 쉬운 설명)",
+      "publishedAt": "문서 발행/게시 시점 (YYYY-MM, 알 수 있으면)",
+      "sourceUrl": "원본 다운로드 URL",
+      "localFile": "현재 스테이징 파일명 (추후 Firebase Storage originalPath로 대체)",
+      "originalPath": "Firebase Storage 경로 (배선 후: originals/{id}.pdf)"
+    }
+  },
+  "items": [
+    {
+      "id": "skku-2026-susi",
+      "university": "성균관대학교",
+      "univType": "사립",
+      "region": "서울",
+      "isCapitalArea": true,
+      "docType": "수시모집요강",
+      "admissionYear": 2026,
+      "examYear": 2025,
+      "targetGrade": "2025년 수능 응시생 (현재 고3)",
+      "publishedAt": "2025-07",
+      "sourceUrl": "https://admission.skku.edu/upload/guide/20250710145541Q5X58D.pdf",
+      "localFile": "성균관대_2026_수시모집요강.pdf",
+      "originalPath": "originals/skku-2026-susi.pdf",
+      "publicUrl": "https://firebasestorage.googleapis.com/v0/b/jinro-community.firebasestorage.app/o/originals%2Fskku-2026-susi.pdf?alt=media&token=2dbee813-7225-4754-8f39-67cc8f80b713"
+    },
+    {
+      "id": "snu-2026-susi",
+      "university": "서울대학교",
+      "univType": "국립",
+      "region": "서울",
+      "isCapitalArea": true,
+      "docType": "수시모집요강",
+      "admissionYear": 2026,
+      "examYear": 2025,
+      "targetGrade": "2025년 수능 응시생 (현재 고3)",
+      "publishedAt": "2025-05",
+      "sourceUrl": "https://admission.snu.ac.kr/webdata/admission/files/2026susi.pdf",
+      "localFile": "서울대_2026_수시모집안내.pdf",
+      "originalPath": "originals/snu-2026-susi.pdf",
+      "publicUrl": "https://firebasestorage.googleapis.com/v0/b/jinro-community.firebasestorage.app/o/originals%2Fsnu-2026-susi.pdf?alt=media&token=b7be9a47-a9b7-4f64-901e-1e8cc3892fd7"
+    }
+  ]
+}

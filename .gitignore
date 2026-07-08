@@ -37,3 +37,6 @@ next-env.d.ts
 # 원본 PDF는 Firebase Storage에 보관 — git엔 넣지 않음(용량). scratch는 렌더 임시물.
 /docs/*.pdf
 /scratch/
+
+# 스테이징 요강 PDF (원본은 Firebase Storage에 있음 — git 제외)
+docs/*.pdf

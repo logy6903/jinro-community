@@ -56,7 +56,10 @@ export default async function InfoPage({
       {items.length > 0 ? (
         <div className="flex flex-col gap-3">
           {items.map((it) => {
-            const external = it.url.startsWith("http");
+            // 텍스트 콘텐츠(본문 有)는 상세 페이지로, 파일/외부는 원문 링크로.
+            const hasBody = Boolean(it.body && it.body.trim());
+            const href = hasBody ? `/info/${it.id}` : it.url;
+            const external = !hasBody && it.url.startsWith("http");
             const inner = (
               <>
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -87,7 +90,7 @@ export default async function InfoPage({
             return external ? (
               <a
                 key={it.id}
-                href={it.url}
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cls}
@@ -95,7 +98,7 @@ export default async function InfoPage({
                 {inner}
               </a>
             ) : (
-              <Link key={it.id} href={it.url} className={cls}>
+              <Link key={it.id} href={href} className={cls}>
                 {inner}
               </Link>
             );
