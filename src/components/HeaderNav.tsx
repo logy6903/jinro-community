@@ -87,6 +87,7 @@ export function HeaderNav() {
         label="자료실"
         items={[
           { href: "/datasets", label: "데이터" },
+          { href: "/collect", label: "데이터 정리·엑셀" },
           { href: "/board", label: "자료 공유" },
           { href: "/info", label: "정보" },
         ]}
