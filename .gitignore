@@ -33,3 +33,7 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+# 원본 PDF는 Firebase Storage에 보관 — git엔 넣지 않음(용량). scratch는 렌더 임시물.
+/docs/*.pdf
+/scratch/

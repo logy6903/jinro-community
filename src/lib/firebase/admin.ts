@@ -9,6 +9,7 @@ import {
 } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage, type Storage } from "firebase-admin/storage";
 
 // Server-side Firebase Admin. Used by the content repository for Firestore
 // reads/writes in server components and route handlers.
@@ -77,4 +78,15 @@ export function isFirestoreConfigured(): boolean {
 export function getAdminAuth(): Auth | null {
   const app = initAdminApp();
   return app ? getAuth(app) : null;
+}
+
+/** Storage bucket handle for large originals (PDFs), or null if unconfigured.
+ * Bucket name from FIREBASE_STORAGE_BUCKET / NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. */
+export function getAdminBucket(): ReturnType<Storage["bucket"]> | null {
+  const app = initAdminApp();
+  const bucketName =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!app || !bucketName) return null;
+  return getStorage(app).bucket(bucketName);
 }
