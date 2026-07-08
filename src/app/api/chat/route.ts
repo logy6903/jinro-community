@@ -1,46 +1,16 @@
-import { ask } from "@/lib/chat/answer";
-import { getAdminAuth } from "@/lib/firebase/admin";
+import { answerLocal } from "@/lib/chat/local";
 
-// POST /api/chat — grounded Q&A over teacher-uploaded datasets.
-// LOGIN REQUIRED: this endpoint calls Claude (paid), so an anonymous public
-// endpoint is a cost-abuse vector. Verify a Firebase ID token before answering.
-// Reading the underlying data stays public; only the LLM call is gated.
-
-async function requireUid(req: Request): Promise<string | null> {
-  const header = req.headers.get("authorization");
-  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
-  const auth = getAdminAuth();
-  if (!token || !auth) return null;
-  try {
-    return (await auth.verifyIdToken(token)).uid;
-  } catch {
-    return null;
-  }
-}
+// POST /api/chat — 저장된 데이터에서만 답하는 규칙기반 응답(LLM 없음).
+// 질문을 키워드로 파싱해 매칭 행/자료를 그대로 반환한다. 생성이 없어 할루시네이션
+// 불가 = closed-world. 유료 호출이 없으니 로그인 게이트도 없음(공개).
 
 export async function POST(req: Request) {
-  const uid = await requireUid(req);
-  if (!uid) {
-    return Response.json(
-      { error: "auth_required", answer: "챗봇은 로그인 후 이용할 수 있어요.", sources: [] },
-      { status: 401 },
-    );
-  }
-
   const body = (await req.json().catch(() => null)) as { question?: unknown } | null;
   const question =
     typeof body?.question === "string" ? body.question.trim().slice(0, 500) : "";
   if (!question) {
     return Response.json({ error: "empty_question" }, { status: 400 });
   }
-
-  const result = await ask(question);
-  if (!result.configured) {
-    return Response.json({
-      answer: "챗봇이 아직 설정되지 않았어요. (관리자: 서버에 ANTHROPIC_API_KEY 필요)",
-      sources: [],
-      configured: false,
-    });
-  }
+  const result = await answerLocal(question);
   return Response.json(result);
 }
