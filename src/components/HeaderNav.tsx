@@ -96,10 +96,10 @@ export function HeaderNav() {
         label="올리기"
         accent
         items={[
-          { href: "/datasets/new", label: "엑셀 데이터 올리기" },
           { href: "/pdf", label: "요강 작업실 (PDF)" },
           { href: "/naeshin", label: "내신 검수 (베타)" },
           { href: "/board/new", label: "자료 공유 글쓰기" },
+          { href: "/datasets/new", label: "엑셀 직접 올리기 (내 자료)" },
         ]}
       />
       <Link href="/builder" className="text-sm text-muted hover:text-foreground">
