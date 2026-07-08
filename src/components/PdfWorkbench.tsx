@@ -17,6 +17,7 @@ const MAX_SCALE = 3;
 
 export function PdfWorkbench({ source }: { source: PdfSource }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<PDFDocumentProxy | null>(null);
   const loadingTaskRef = useRef<{ destroy: () => Promise<void> } | null>(null);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
@@ -34,6 +35,8 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
   const [mapError, setMapError] = useState<string | null>(null);
   const [activeTable, setActiveTable] = useState<TableMapEntry | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  // 오른쪽(작업) 단 너비 — 드래그로 조절(작은 모니터 대응).
+  const [rightWidth, setRightWidth] = useState(400);
 
   // 문서 1회 로드.
   useEffect(() => {
@@ -104,6 +107,25 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
     setPage((p) => Math.min(numPages || 1, Math.max(1, p + d)));
   const zoom = (d: number) =>
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(s + d).toFixed(2))));
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const onMove = (ev: MouseEvent) => {
+      // 컨테이너 우측 끝 - 커서 X = 오른쪽 단 너비 (innerWidth 비의존, 어디서나 정확).
+      const rect = bodyRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const w = rect.right - ev.clientX;
+      setRightWidth(Math.max(300, Math.min(rect.width - 320, w)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
 
   async function runMap() {
     if (mapping) return;
@@ -220,8 +242,8 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
       </header>
 
       {/* 본문: 왼쪽 원본 | 오른쪽 작업 */}
-      <div className="flex min-h-0 flex-1">
-        <div className="flex-1 overflow-auto bg-neutral-100 p-4">
+      <div ref={bodyRef} className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-auto bg-neutral-100 p-4">
           {loading && (
             <p className="mt-10 text-center text-sm text-muted">
               원본을 불러오는 중…
@@ -239,7 +261,17 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
           </div>
         </div>
 
-        <aside className="flex w-96 shrink-0 flex-col overflow-hidden border-l border-border bg-card">
+        {/* 드래그 구분선 — 좌우 단 너비 조절 */}
+        <div
+          onMouseDown={startResize}
+          title="드래그해서 너비 조절"
+          className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-brand"
+        />
+
+        <aside
+          style={{ width: rightWidth }}
+          className="flex shrink-0 flex-col overflow-hidden bg-card"
+        >
           {activeTable ? (
             <TableExtractPanel
               source={source}
