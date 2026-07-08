@@ -42,6 +42,10 @@ export interface DatasetInput {
   rows: string[][];
   /** Total rows the teacher's file had (may exceed the stored, capped rows). */
   totalRows: number;
+  /** PDF 추출본이면 원본 소스([[PdfSource]]) id. 엑셀 업로드면 생략. */
+  sourceId?: string;
+  /** 원문 PDF 열람 URL ("원문 보기" 링크). */
+  originalUrl?: string;
 }
 
 /** Validate + normalize an upload. Returns null when structurally invalid. */
@@ -82,11 +86,16 @@ export function sanitizeDatasetInput(raw: unknown): DatasetInput | null {
       (Array.isArray(row) ? row : []).slice(0, columns.length).map((c) => str(c, MAX_CELL)),
     );
 
+  const sourceId = str(r.sourceId, 120) || undefined;
+  const originalUrl = str(r.originalUrl, 500) || undefined;
+
   return {
     envelope: { title, category, schoolLevel, year, source, customFields },
     columns,
     rows,
     totalRows,
+    sourceId,
+    originalUrl,
   };
 }
 
@@ -120,6 +129,8 @@ function toDataset(id: string, data: FirebaseFirestore.DocumentData): Dataset {
     columns: Array.isArray(data.columns) ? data.columns : [],
     rows,
     rowCount: typeof data.rowCount === "number" ? data.rowCount : rows.length,
+    ...(data.sourceId ? { sourceId: data.sourceId } : {}),
+    ...(data.originalUrl ? { originalUrl: data.originalUrl } : {}),
     createdAt: createdAt?.toDate().toISOString() ?? "",
   };
 }
@@ -137,6 +148,9 @@ export async function createDataset(
     columns: input.columns,
     rowsJson: JSON.stringify(input.rows),
     rowCount: input.totalRows,
+    // Firestore는 undefined를 거부 — 있을 때만 넣는다.
+    ...(input.sourceId ? { sourceId: input.sourceId } : {}),
+    ...(input.originalUrl ? { originalUrl: input.originalUrl } : {}),
     createdAt: FieldValue.serverTimestamp(),
   });
   return ref.id;

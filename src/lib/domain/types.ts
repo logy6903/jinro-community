@@ -161,8 +161,53 @@ export interface Dataset extends DatasetEnvelope {
   rows: string[][];
   /** 실제 총 행 수 (상한 초과 시 rows.length보다 클 수 있음). */
   rowCount: number;
+  /** PDF에서 추출된 경우, 원본 소스([[PdfSource]])의 id. 엑셀 업로드면 없음. */
+  sourceId?: string;
+  /** 원문 PDF 열람 URL (챗봇 답변의 "원문 보기" 링크용). */
+  originalUrl?: string;
   createdAt: string;
 }
+
+// ── 원본 PDF 소스(요강 등) ────────────────────────────────────
+// 큰 원본은 Firebase Storage에 두고, 여기(Firestore pdf_sources)엔 메타 + 경로만.
+// 추출된 데이터셋(Dataset.sourceId)과 서술형 자료가 이 원본을 참조한다.
+// docType으로 정형(표 추출) / 서술형(원문+해설)을 구분.
+
+export type DocType =
+  | "수시모집요강"
+  | "정시모집요강"
+  | "전형시행계획"
+  | "선행학습영향평가보고서" // 서술형
+  | "대학별고사자료"; // 논술·면접 기출 등 (서술형)
+
+export type UnivType = "국립" | "공립" | "사립";
+
+/** Storage에 올라간 원본 PDF 1건의 메타데이터 (목록·필터·원문링크용). */
+export interface PdfSource {
+  id: string;
+  university: string;
+  univType: UnivType;
+  region: string;
+  isCapitalArea: boolean;
+  docType: DocType;
+  /** 학년도 (공식 라벨, 예: 2026). */
+  admissionYear: number;
+  /** 수능 치르는 해 = admissionYear - 1. 연도 혼동 방지로 분리 저장. */
+  examYear: number;
+  targetGrade: string;
+  /** 발행/게시 시점 (YYYY-MM, 알면). */
+  publishedAt: string;
+  /** 원본 다운로드 출처 URL (대학 입학처 등). */
+  sourceUrl: string;
+  /** Firebase Storage 경로 (originals/{id}.pdf). */
+  originalPath: string;
+  /** 공개 열람 URL. */
+  originalUrl: string;
+  createdAt?: string;
+}
+
+/** 원본 등록 시 입력 (id 포함 — 대학·연도 기반 안정 식별자). */
+export type PdfSourceInput = Omit<PdfSource, "createdAt">;
 
 // ── 진로 일정표 ─────────────────────────────────────────────
 // 두 축 중 "일정표": 화면 캘린더로 한눈에. 공용 일정(I&AI 기본, academicCalendar에서
