@@ -156,6 +156,32 @@ export async function createDataset(
   return ref.id;
 }
 
+/**
+ * id를 지정해 upsert. 정리본(챗봇/집계 결과 자동 저장)에 쓴다 — 같은 정리를 다시
+ * 내보내면 새 문서가 쌓이지 않고 갱신되어 잡음을 막는다.
+ */
+export async function upsertDataset(
+  id: string,
+  input: DatasetInput,
+  author: { uid: string; name: string },
+): Promise<string | null> {
+  const db = getAdminDb();
+  if (!db) return null;
+  await db.collection(DATASETS_COLLECTION).doc(id).set(
+    {
+      ...input.envelope,
+      authorUid: author.uid,
+      authorName: author.name,
+      columns: input.columns,
+      rowsJson: JSON.stringify(input.rows),
+      rowCount: input.totalRows,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return id;
+}
+
 /** Lightweight list (no rows) for the index page. */
 export async function listDatasets(): Promise<Omit<Dataset, "rows">[]> {
   const db = getAdminDb();

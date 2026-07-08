@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import type {
   Dataset,
   DatasetCategory,
@@ -44,10 +45,12 @@ function sheetName(base: string, used: Set<string>): string {
 }
 
 export function DatasetCollector({ datasets }: { datasets: Meta[] }) {
+  const { user } = useAuth();
   const [category, setCategory] = useState<string>(ALL);
   const [level, setLevel] = useState<string>(ALL);
   const [year, setYear] = useState<string>(ALL);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const years = useMemo(
     () =>
@@ -71,6 +74,7 @@ export function DatasetCollector({ datasets }: { datasets: Meta[] }) {
   async function exportExcel() {
     if (busy || matched.length === 0) return;
     setBusy(true);
+    setSaved(false);
     try {
       const res = await fetch("/api/datasets/export", {
         method: "POST",
@@ -117,6 +121,29 @@ export function DatasetCollector({ datasets }: { datasets: Meta[] }) {
       }
 
       XLSX.writeFile(wb, "데이터정리.xlsx");
+
+      // 로그인 교사면 정리본을 자료실에 자동 저장(누가·언제, 필터 id로 upsert).
+      if (user) {
+        const token = await user.getIdToken();
+        await fetch("/api/datasets/compilation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            key: `${category}-${level}-${year}`,
+            envelope: {
+              title: `정리: ${category === ALL ? "전체" : DATASET_CATEGORY_LABEL[category as DatasetCategory]} · ${level === ALL ? "전체" : DATASET_LEVEL_LABEL[level as DatasetLevel]} · ${year === ALL ? "전체" : year}`,
+              category: category === ALL ? "etc" : category,
+              schoolLevel: level === ALL ? "both" : level,
+              year: year === ALL ? "" : year,
+              source: "자료 정리 (자동)",
+              customFields: [{ key: "유형", value: "정리본" }],
+            },
+            columns: summary[0],
+            rows: summary.slice(1),
+          }),
+        }).catch(() => {});
+        setSaved(true);
+      }
     } finally {
       setBusy(false);
     }
@@ -167,6 +194,13 @@ export function DatasetCollector({ datasets }: { datasets: Meta[] }) {
           {busy ? "내보내는 중…" : "엑셀 다운로드"}
         </button>
       </div>
+      <p className="text-xs text-muted">
+        {saved
+          ? "이 정리를 자료실에 저장했어요 ✓ (누가·언제 표시, 같은 정리는 갱신)"
+          : user
+            ? "엑셀을 내려받으면 이 정리가 자료실에도 자동 저장됩니다."
+            : "로그인하면 내려받은 정리가 자료실에도 자동 저장됩니다."}
+      </p>
 
       {matched.length > 0 ? (
         <div className="overflow-x-auto rounded-2xl border border-border">
