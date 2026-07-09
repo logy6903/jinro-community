@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type {
   DatasetCategory,
@@ -90,6 +90,23 @@ export function TableExtractPanel({
   // 분류 태그(customFields). 검수 모드면 저장본의 기존 태그를 그대로 이어받는다(공개 시 유실 방지).
   const [tags, setTags] = useState<{ key: string; value: string }[]>(preloaded?.customFields ?? []);
   const tagSpecs = TAG_SPECS[category] ?? [];
+
+  // 보기 모드: 조건 긴 표(일정·주석형)는 가로 스크롤이 불편 → 카드 뷰 기본, 아니면 격자.
+  const bigoIdx = columns.findIndex((c) => c.includes("비고") || c.includes("조건"));
+  const [viewMode, setViewMode] = useState<"grid" | "card">(
+    preloaded && rows.some((r) => r.some((c) => (c?.length ?? 0) > 60)) ? "card" : "grid",
+  );
+  const splitFrag = (v: string) =>
+    (v ?? "")
+      .split(" / ")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  // 모든 행에 공통으로 붙은 조건(※·각주) — 상단에 한 번만 접어 보여 반복 노이즈 제거.
+  const commonFragments = useMemo(() => {
+    if (bigoIdx < 0 || rows.length < 2) return [] as string[];
+    const perRow = rows.map((r) => new Set(splitFrag(r[bigoIdx] ?? "")));
+    return [...(perRow[0] ?? [])].filter((f) => perRow.every((s) => s.has(f)));
+  }, [rows, bigoIdx]);
 
   async function runExtract() {
     if (extracting) return;
@@ -285,87 +302,197 @@ export function TableExtractPanel({
               )
             )}
 
-            {/* 편집 그리드 — 셀 수정 + 행/열 추가·삭제로 추출 오류를 검수자가 교정 */}
+            {/* 편집 영역 — 표(격자)/카드 토글. 조건 긴 표는 카드가 편함 */}
             <div className="flex flex-col gap-1.5">
-              <div className="overflow-x-auto">
-                <table className="border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="w-5 p-0" />
-                      {columns.map((c, ci) => (
-                        <th key={ci} className="p-0">
-                          <div className="flex items-center">
-                            <input
-                              value={c}
-                              onChange={(e) => setHeader(ci, e.target.value)}
-                              className={`${cellClass} w-full font-medium text-brand`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => deleteColumn(ci)}
-                              title="열 삭제"
-                              aria-label="열 삭제"
-                              className="shrink-0 px-1 text-[10px] text-muted hover:text-red-600"
-                            >
-                              ✕
-                            </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted">
+                  {rows.length}행 × {columns.length}열
+                </span>
+                <div className="ml-auto flex rounded-full border border-border p-0.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("card")}
+                    className={
+                      viewMode === "card"
+                        ? "rounded-full bg-brand px-2 py-0.5 font-medium text-white"
+                        : "px-2 py-0.5 text-muted"
+                    }
+                  >
+                    카드
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("grid")}
+                    className={
+                      viewMode === "grid"
+                        ? "rounded-full bg-brand px-2 py-0.5 font-medium text-white"
+                        : "px-2 py-0.5 text-muted"
+                    }
+                  >
+                    표
+                  </button>
+                </div>
+              </div>
+
+              {viewMode === "grid" ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="w-5 p-0" />
+                          {columns.map((c, ci) => (
+                            <th key={ci} className="p-0">
+                              <div className="flex items-center">
+                                <input
+                                  value={c}
+                                  onChange={(e) => setHeader(ci, e.target.value)}
+                                  className={`${cellClass} w-full font-medium text-brand`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => deleteColumn(ci)}
+                                  title="열 삭제"
+                                  aria-label="열 삭제"
+                                  className="shrink-0 px-1 text-[10px] text-muted hover:text-red-600"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row, ri) => (
+                          <tr key={ri}>
+                            <td className="p-0 text-center align-middle">
+                              <button
+                                type="button"
+                                onClick={() => deleteRow(ri)}
+                                title="행 삭제"
+                                aria-label="행 삭제"
+                                className="px-0.5 text-[10px] text-muted hover:text-red-600"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                            {columns.map((_, ci) => (
+                              <td key={ci} className="p-0">
+                                <input
+                                  value={row[ci] ?? ""}
+                                  onChange={(e) => setCell(ri, ci, e.target.value)}
+                                  className={cellClass}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addRow}
+                      className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
+                    >
+                      + 행 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addColumn}
+                      className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
+                    >
+                      + 열 추가
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {/* 모든 행에 공통인 조건(※·각주)은 여기 한 번만 — 반복 노이즈 제거 */}
+                  {commonFragments.length > 0 && (
+                    <details className="rounded-lg border border-border bg-neutral-50 p-2 text-[11px] text-muted">
+                      <summary className="cursor-pointer font-medium">
+                        공통 조건 {commonFragments.length}개 — 모든 행 동일 (펼쳐 보기)
+                      </summary>
+                      <ul className="mt-1 flex flex-col gap-0.5 leading-relaxed text-foreground/70">
+                        {commonFragments.map((f, i) => (
+                          <li key={i}>• {f}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+
+                  {rows.map((row, ri) => {
+                    const unique =
+                      bigoIdx >= 0
+                        ? splitFrag(row[bigoIdx] ?? "").filter((f) => !commonFragments.includes(f))
+                        : [];
+                    return (
+                      <div key={ri} className="flex flex-col gap-1.5 rounded-lg border border-border p-2">
+                        <div className="flex items-start gap-1">
+                          <div className="flex flex-1 flex-wrap gap-1.5">
+                            {columns.map((c, ci) =>
+                              ci === bigoIdx ? null : (
+                                <label key={ci} className="flex min-w-[6rem] flex-1 flex-col gap-0.5">
+                                  <span className="text-[10px] font-medium text-muted">{c}</span>
+                                  <input
+                                    value={row[ci] ?? ""}
+                                    onChange={(e) => setCell(ri, ci, e.target.value)}
+                                    className="rounded border border-border bg-card px-1.5 py-1 text-xs outline-none focus:border-brand"
+                                  />
+                                </label>
+                              ),
+                            )}
                           </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, ri) => (
-                      <tr key={ri}>
-                        <td className="p-0 text-center align-middle">
                           <button
                             type="button"
                             onClick={() => deleteRow(ri)}
                             title="행 삭제"
                             aria-label="행 삭제"
-                            className="px-0.5 text-[10px] text-muted hover:text-red-600"
+                            className="shrink-0 px-1 pt-4 text-[10px] text-muted hover:text-red-600"
                           >
                             ✕
                           </button>
-                        </td>
-                        {columns.map((_, ci) => (
-                          <td key={ci} className="p-0">
-                            <input
-                              value={row[ci] ?? ""}
-                              onChange={(e) => setCell(ri, ci, e.target.value)}
-                              className={cellClass}
+                        </div>
+                        {bigoIdx >= 0 && (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium text-muted">{columns[bigoIdx]}</span>
+                            {unique.length > 0 && (
+                              <div className="rounded bg-amber-50 px-2 py-1 text-[11px] leading-relaxed text-amber-800">
+                                🔹 이 행 고유: {unique.join(" · ")}
+                              </div>
+                            )}
+                            <textarea
+                              value={row[bigoIdx] ?? ""}
+                              onChange={(e) => setCell(ri, bigoIdx, e.target.value)}
+                              rows={2}
+                              className="w-full rounded border border-border bg-card px-2 py-1 text-xs leading-relaxed outline-none focus:border-brand"
                             />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={addRow}
-                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
-                >
-                  + 행 추가
-                </button>
-                <button
-                  type="button"
-                  onClick={addColumn}
-                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
-                >
-                  + 열 추가
-                </button>
-                <span className="ml-auto text-[10px] text-muted">
-                  {rows.length}행 × {columns.length}열
-                </span>
-              </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={addRow}
+                    className="self-start rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
+                  >
+                    + 행 추가
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* 조건(주석) 편집 */}
+            {/* 조건(주석) 편집 — 라이브 추출 때만. 검수(저장본)엔 이미 비고/조건 열에 병합됨 */}
+            {!preloaded && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-semibold text-muted">
+              <span
+                className="text-xs font-semibold text-muted"
+                title="표 밖에 붙은 각주·주석(※, 1), 2)…). 저장하면 각 행의 '비고/조건' 칸에 병합됩니다. 대개 그대로 두면 됩니다."
+              >
                 조건(주석) {notes.length}개 — 저장 시 &lsquo;비고/조건&rsquo; 열로 각 행에 붙음
               </span>
               {notes.map((n, i) => (
@@ -403,44 +530,70 @@ export function TableExtractPanel({
                 + 조건 추가
               </button>
             </div>
+            )}
 
-            {/* 봉투 */}
+            {/* 봉투 — 이 표를 챗봇이 찾고 분류하는 정보 */}
             <div className="flex flex-col gap-2 border-t border-border pt-3">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="제목"
-                maxLength={150}
-                className={inputClass}
-              />
+              <span
+                className="text-xs font-semibold text-muted"
+                title="아래 정보로 챗봇이 이 표를 검색·분류합니다. 배치로 뽑은 표는 대개 그대로 두면 됩니다."
+              >
+                봉투 — 검색·분류 정보{" "}
+                <span className="font-normal">(대개 그대로 두면 됨)</span>
+              </span>
+              <label className="flex flex-col gap-0.5" title="목록·검색에서 이 표를 알아볼 이름입니다.">
+                <span className="text-[10px] text-muted">제목</span>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="제목"
+                  maxLength={150}
+                  className={inputClass}
+                />
+              </label>
               <div className="flex gap-2">
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as DatasetCategory)}
-                  className={inputClass}
+                <label
+                  className="flex flex-1 flex-col gap-0.5"
+                  title="이 표가 어떤 종류인지 — 입시·전형/입결/논술 등. 챗봇 검색 분류에 쓰입니다."
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {DATASET_CATEGORY_LABEL[c]}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={schoolLevel}
-                  onChange={(e) => setSchoolLevel(e.target.value as DatasetLevel)}
-                  className={inputClass}
+                  <span className="text-[10px] text-muted">구분</span>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as DatasetCategory)}
+                    className={inputClass}
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {DATASET_CATEGORY_LABEL[c]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label
+                  className="flex flex-1 flex-col gap-0.5"
+                  title="이 자료가 중학교/고등학교 중 어디 대상인지. 대입 요강이면 보통 고등학교."
                 >
-                  {LEVELS.map((l) => (
-                    <option key={l} value={l}>
-                      {DATASET_LEVEL_LABEL[l]}
-                    </option>
-                  ))}
-                </select>
+                  <span className="text-[10px] text-muted">대상</span>
+                  <select
+                    value={schoolLevel}
+                    onChange={(e) => setSchoolLevel(e.target.value as DatasetLevel)}
+                    className={inputClass}
+                  >
+                    {LEVELS.map((l) => (
+                      <option key={l} value={l}>
+                        {DATASET_LEVEL_LABEL[l]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               {/* 분류 태그 — "이 숫자가 무엇인지"를 봉투에 명시(검색·비교 정확도). */}
               <div className="flex flex-col gap-1.5 rounded-lg border border-border p-2">
-                <span className="text-xs font-semibold text-muted">
+                <span
+                  className="text-xs font-semibold text-muted"
+                  title="이 표가 '무엇에 관한' 건지 태그로. 예: 입결이면 지표=70%컷·기준=최종등록자. 검색·비교 정확도를 높입니다. 없어도 저장/공개 됩니다."
+                >
                   분류 태그 <span className="font-normal">— 검색·비교용 (예: 지표=70%컷)</span>
                 </span>
                 {tagSpecs.length > 0 && (
