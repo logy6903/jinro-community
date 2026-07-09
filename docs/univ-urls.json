@@ -1,9 +1,13 @@
 [
-  {"university":"한양대학교","sourceUrl":"https://go.hanyang.ac.kr/file/download.do?menu=boardfile&file_no=2569","note":"공식"},
-  {"university":"중앙대학교","sourceUrl":"https://admission.cau.ac.kr/file/download.do?sfn=20250908111545154_28b62eb34fcf4e3d94e3f13ff28534c7.pdf&ofn=2026중앙대학교_수시모집요강.pdf","note":"공식"},
-  {"university":"경희대학교","sourceUrl":"https://kr.object.gov-ncloudstorage.com/khuiphakstorage/upload/20250502014147159_2026학년도 경희대학교 수시 모집요강(0430)_fv.pdf","note":"공식"},
-  {"university":"한국외국어대학교","sourceUrl":"https://cdn013.negagea.net/dgsmidc/omr/seoul/web/univ_info2025/한국외국어대학교/한국외국어대학교_2026학년도_수시모집요강.pdf","note":"미러(cdn013)"},
-  {"university":"건국대학교","sourceUrl":"https://cdn013.negagea.net/dgsmidc/omr/seoul/web/univ_info2025/건국대학교/건국대학교_2026학년도_수시모집요강.pdf","note":"미러(cdn013) — 공식 enter.konkuk 봇차단"},
-  {"university":"동국대학교","sourceUrl":"https://ipsi.dongguk.edu/upload/file/20250709190307NTHGCC.PDF","note":"공식"},
-  {"university":"홍익대학교","sourceUrl":"https://www.hongik.ac.kr/kr/admission/recruitment.do?mode=download&articleNo=137200&attachNo=82961","note":"공식"}
+  {"university":"UNIST","sourceUrl":"https://adm-u.unist.ac.kr/wp-content/uploads/2021/05/2026%ED%95%99%EB%85%84%EB%8F%84-%ED%95%99%EB%B6%80-%EC%8B%A0%EC%9E%85%EC%83%9D-%EB%AA%A8%EC%A7%91%EC%9A%94%EA%B0%95_1-1.pdf","note":"공식"},
+  {"university":"GIST","sourceUrl":"https://ewww.gist.ac.kr/download/?file_id=sqfortm6tm7o0mkxkgtqpnurromtdu","note":"공식 — 연도 확인要(2027 갱신 가능성)"},
+  {"university":"DGIST","sourceUrl":"https://ipsi3.uwayapply.com/susi1/dgist/1/univ_img/yogang_3.pdf","note":"공식(uwayapply 호스팅)"},
+  {"university":"울산대학교","sourceUrl":"https://iphak.ulsan.ac.kr/upload/board/2025/05/30/6cbd597d-9eb8-41ea-82b2-9c8f8617f75e.pdf","note":"공식"},
+  {"university":"영남대학교","sourceUrl":"https://enter.yu.ac.kr/nfsdata/yu.ac.kr/admission/bbs/flashpaper_20250904154535_9733.pdf","note":"공식"},
+  {"university":"계명대학교","sourceUrl":"https://dept.kmu.ac.kr/pdfView/webtoon/43/369/fileDownload.do","note":"공식"},
+  {"university":"동아대학교","sourceUrl":"https://ent.donga.ac.kr/upload/BBS0021/20250530143723H3LSK4.PDF","note":"공식"},
+  {"university":"원광대학교","sourceUrl":"https://ipsi.wku.ac.kr/file/pdfDown.pdf?sfn=20250531045547998_2026+%EC%9B%90%EA%B4%91%EB%8C%80%ED%95%99%EA%B5%90+%EC%88%98%EC%8B%9C%EB%AA%A8%EC%A7%91%EC%9A%94%EA%B0%95(low).pdf&ofn=x.pdf","note":"공식"},
+  {"university":"한림대학교","sourceUrl":"https://admission.hallym.ac.kr/bbs/admission/957/220395/download.do","note":"공식"},
+  {"university":"인제대학교","sourceUrl":null,"note":"board형·토큰 첨부라 직PDF 없음 — 수동 필요"},
+  {"university":"조선대학교","sourceUrl":null,"note":"SPA형 첨부 미노출 — 브라우저 스크랩 필요"}
 ]
