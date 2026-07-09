@@ -11,6 +11,7 @@ export const SOURCES_COLLECTION = "pdf_sources";
 const DOC_TYPES: DocType[] = [
   "수시모집요강",
   "정시모집요강",
+  "모집요강",
   "전형시행계획",
   "선행학습영향평가보고서",
   "대학별고사자료",

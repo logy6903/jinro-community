@@ -85,39 +85,61 @@ export function DatasetCollector({ datasets }: { datasets: Meta[] }) {
 
       const wb = XLSX.utils.book_new();
       const used = new Set<string>();
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      // 출처가 된 원본 PDF의 그 페이지만 잘라 받는 절대 URL (PDF 추출본에만 존재).
+      const pageHref = (d: Dataset): string =>
+        d.sourceId && d.sourcePage
+          ? `${origin}/api/pdf/${d.sourceId}/page?start=${d.sourcePage}&end=${d.sourceEndPage ?? d.sourcePage}`
+          : "";
 
-      // 요약 시트: 어느 대학/자료가 매칭됐나 (완전성).
+      // 요약 시트: 어느 대학/자료가 매칭됐나 (완전성) + 출처 페이지 바로가기.
       const summary = [
-        ["제목", "구분", "대상", "학년도", "출처", "행수"],
+        ["제목", "구분", "대상", "학년도", "출처", "출처 페이지", "행수"],
         ...full.map((d) => [
           d.title,
           DATASET_CATEGORY_LABEL[d.category],
           DATASET_LEVEL_LABEL[d.schoolLevel],
           d.year,
           d.source,
+          pageHref(d) ? "페이지 PDF" : "",
           d.rowCount,
         ]),
       ];
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.aoa_to_sheet(summary),
-        sheetName("요약", used),
-      );
+      const summaryWs = XLSX.utils.aoa_to_sheet(summary);
+      // "출처 페이지" 칸(index 5)을 클릭 가능한 하이퍼링크 셀로 승격.
+      full.forEach((d, i) => {
+        const href = pageHref(d);
+        if (!href) return;
+        const addr = XLSX.utils.encode_cell({ r: i + 1, c: 5 });
+        summaryWs[addr] = {
+          t: "s",
+          v: "페이지 PDF",
+          l: { Target: href, Tooltip: "출처 페이지 원본 PDF" },
+        };
+      });
+      XLSX.utils.book_append_sheet(wb, summaryWs, sheetName("요약", used));
 
-      // 데이터셋별 시트 (봉투 + 표).
+      // 데이터셋별 시트 (봉투 + 표). 봉투에 출처 페이지 링크 한 줄.
       for (const d of full) {
+        const href = pageHref(d);
         const aoa: (string | number)[][] = [
           [d.title],
           [`${DATASET_CATEGORY_LABEL[d.category]} · ${d.year} · ${d.source}`],
+          ...(href ? [["출처 페이지 PDF", "열기"]] : []),
           [],
           d.columns,
           ...d.rows,
         ];
-        XLSX.utils.book_append_sheet(
-          wb,
-          XLSX.utils.aoa_to_sheet(aoa),
-          sheetName(d.title, used),
-        );
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        if (href) {
+          // 봉투 3번째 줄(r=2)의 2번째 칸(c=1)을 링크로.
+          ws[XLSX.utils.encode_cell({ r: 2, c: 1 })] = {
+            t: "s",
+            v: "열기 ↗",
+            l: { Target: href, Tooltip: "출처 페이지 원본 PDF" },
+          };
+        }
+        XLSX.utils.book_append_sheet(wb, ws, sheetName(d.title, used));
       }
 
       XLSX.writeFile(wb, "데이터정리.xlsx");

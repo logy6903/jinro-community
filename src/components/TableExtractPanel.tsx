@@ -147,6 +147,8 @@ export function TableExtractPanel({
           rows: merged.rows,
           sourceId: source.id,
           originalUrl: source.originalUrl,
+          sourcePage: table.page,
+          sourceEndPage: table.endPage ?? table.page,
         }),
       });
       if (!res.ok) {

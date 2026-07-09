@@ -165,6 +165,10 @@ export interface Dataset extends DatasetEnvelope {
   sourceId?: string;
   /** 원문 PDF 열람 URL (챗봇 답변의 "원문 보기" 링크용). */
   originalUrl?: string;
+  /** 이 표가 있던 원본 PDF 시작 페이지(1-based). "출처 페이지만 잘라 다운로드"용. */
+  sourcePage?: number;
+  /** 여러 페이지 표면 끝 페이지. 단일 페이지면 sourcePage와 같음. */
+  sourceEndPage?: number;
   createdAt: string;
 }
 
@@ -176,6 +180,7 @@ export interface Dataset extends DatasetEnvelope {
 export type DocType =
   | "수시모집요강"
   | "정시모집요강"
+  | "모집요강" // 수시·정시를 한 권으로 내는 대학용 통합본
   | "전형시행계획"
   | "선행학습영향평가보고서" // 서술형
   | "대학별고사자료"; // 논술·면접 기출 등 (서술형)

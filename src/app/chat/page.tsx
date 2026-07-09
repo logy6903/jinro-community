@@ -199,11 +199,22 @@ function DatasetCard({ d }: { d: LocalDataset }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 flex items-center gap-2 text-xs text-muted">
+      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         {d.source && <span>출처: {d.source}</span>}
+        {d.sourceId && d.sourcePage && (
+          <a
+            href={`/api/pdf/${d.sourceId}/page?start=${d.sourcePage}&end=${d.sourceEndPage ?? d.sourcePage}`}
+            className="font-medium text-brand hover:underline"
+          >
+            출처 페이지 PDF ⬇
+            {d.sourceEndPage && d.sourceEndPage > d.sourcePage
+              ? ` (${d.sourcePage}~${d.sourceEndPage}p)`
+              : ` (${d.sourcePage}p)`}
+          </a>
+        )}
         {d.originalUrl && (
           <a href={d.originalUrl} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
-            원문 보기 ↗
+            원문 전체 ↗
           </a>
         )}
       </p>

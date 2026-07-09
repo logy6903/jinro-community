@@ -46,6 +46,10 @@ export interface DatasetInput {
   sourceId?: string;
   /** 원문 PDF 열람 URL ("원문 보기" 링크). */
   originalUrl?: string;
+  /** 표가 있던 원본 시작 페이지(1-based). "출처 페이지만 잘라 다운로드"용. */
+  sourcePage?: number;
+  /** 여러 페이지 표면 끝 페이지. */
+  sourceEndPage?: number;
 }
 
 /** Validate + normalize an upload. Returns null when structurally invalid. */
@@ -88,6 +92,8 @@ export function sanitizeDatasetInput(raw: unknown): DatasetInput | null {
 
   const sourceId = str(r.sourceId, 120) || undefined;
   const originalUrl = str(r.originalUrl, 500) || undefined;
+  const sourcePage = pageNum(r.sourcePage);
+  const sourceEndPage = pageNum(r.sourceEndPage) ?? sourcePage;
 
   return {
     envelope: { title, category, schoolLevel, year, source, customFields },
@@ -96,7 +102,15 @@ export function sanitizeDatasetInput(raw: unknown): DatasetInput | null {
     totalRows,
     sourceId,
     originalUrl,
+    sourcePage,
+    sourceEndPage,
   };
+}
+
+/** 1~9999 사이 정수 페이지 번호만 통과, 아니면 undefined. */
+function pageNum(v: unknown): number | undefined {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n >= 1 && n <= 9999 ? n : undefined;
 }
 
 function str(v: unknown, max: number): string {
@@ -131,6 +145,8 @@ function toDataset(id: string, data: FirebaseFirestore.DocumentData): Dataset {
     rowCount: typeof data.rowCount === "number" ? data.rowCount : rows.length,
     ...(data.sourceId ? { sourceId: data.sourceId } : {}),
     ...(data.originalUrl ? { originalUrl: data.originalUrl } : {}),
+    ...(typeof data.sourcePage === "number" ? { sourcePage: data.sourcePage } : {}),
+    ...(typeof data.sourceEndPage === "number" ? { sourceEndPage: data.sourceEndPage } : {}),
     createdAt: createdAt?.toDate().toISOString() ?? "",
   };
 }
@@ -151,6 +167,8 @@ export async function createDataset(
     // Firestore는 undefined를 거부 — 있을 때만 넣는다.
     ...(input.sourceId ? { sourceId: input.sourceId } : {}),
     ...(input.originalUrl ? { originalUrl: input.originalUrl } : {}),
+    ...(input.sourcePage ? { sourcePage: input.sourcePage } : {}),
+    ...(input.sourceEndPage ? { sourceEndPage: input.sourceEndPage } : {}),
     createdAt: FieldValue.serverTimestamp(),
   });
   return ref.id;
@@ -180,6 +198,21 @@ export async function upsertDataset(
     { merge: true },
   );
   return id;
+}
+
+/** 기존 데이터에 출처 페이지를 소급 지정(백필). 다른 필드는 건드리지 않는다. */
+export async function updateDatasetSourcePage(
+  id: string,
+  sourcePage: number,
+  sourceEndPage: number,
+): Promise<boolean> {
+  const db = getAdminDb();
+  if (!db) return false;
+  await db
+    .collection(DATASETS_COLLECTION)
+    .doc(id)
+    .set({ sourcePage, sourceEndPage }, { merge: true });
+  return true;
 }
 
 /** Lightweight list (no rows) for the index page. */

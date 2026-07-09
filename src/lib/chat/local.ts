@@ -36,6 +36,10 @@ export interface LocalDataset {
   columns: string[];
   rows: string[][];
   originalUrl?: string;
+  /** 출처 페이지만 잘라 다운로드하기 위한 원본 소스 id + 페이지 범위. */
+  sourceId?: string;
+  sourcePage?: number;
+  sourceEndPage?: number;
 }
 export interface LocalMaterial {
   title: string;
@@ -101,6 +105,9 @@ export async function answerLocal(question: string): Promise<LocalAnswer> {
       columns: full.columns,
       rows: rows.length > 0 ? rows : full.rows.slice(0, MAX_ROWS),
       originalUrl: full.originalUrl,
+      sourceId: full.sourceId,
+      sourcePage: full.sourcePage,
+      sourceEndPage: full.sourceEndPage,
     });
   }
 
