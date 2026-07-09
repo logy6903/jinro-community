@@ -231,6 +231,44 @@ export async function updateDatasetSourcePage(
   return true;
 }
 
+/** 한 소스(요강)에서 나온 데이터셋 전체(행 포함). 검수 워크벤치가 배치로 뽑아둔
+ *  draft를 "딸깍 로드"할 때 쓴다. where(sourceId)만 — 복합색인 불필요, 정렬은 JS로. */
+export async function listDatasetsBySource(sourceId: string): Promise<Dataset[]> {
+  const db = getAdminDb();
+  if (!db) return [];
+  const snap = await db
+    .collection(DATASETS_COLLECTION)
+    .where("sourceId", "==", sourceId)
+    .get();
+  return snap.docs
+    .map((doc) => toDataset(doc.id, doc.data()))
+    .sort((a, b) => (a.sourcePage ?? 0) - (b.sourcePage ?? 0));
+}
+
+/** 검수 완료 → 공개. 검수자가 고친 내용을 함께 반영하고 status를 published로 올린다.
+ *  원 저자(authorUid/Name)는 유지, 검수자(reviewedBy)를 새로 기록. */
+export async function publishDataset(
+  id: string,
+  input: DatasetInput,
+  reviewer: { name: string },
+): Promise<boolean> {
+  const db = getAdminDb();
+  if (!db) return false;
+  await db.collection(DATASETS_COLLECTION).doc(id).set(
+    {
+      ...input.envelope,
+      columns: input.columns,
+      rowsJson: JSON.stringify(input.rows),
+      rowCount: input.totalRows,
+      status: "published",
+      reviewedBy: reviewer.name,
+      reviewedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return true;
+}
+
 /** Lightweight list (no rows) for the index page. */
 export async function listDatasets(): Promise<Omit<Dataset, "rows">[]> {
   const db = getAdminDb();

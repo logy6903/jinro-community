@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import type { PdfSource } from "@/lib/domain/types";
+import type { Dataset, PdfSource } from "@/lib/domain/types";
 import type { TableMapEntry } from "@/lib/extract/types";
-import { TableExtractPanel } from "./TableExtractPanel";
+import { TableExtractPanel, type PreloadedDraft } from "./TableExtractPanel";
 
 // 전체화면 요강 작업대. 왼쪽 = 원본 PDF 페이지(pdf.js canvas 렌더, 동일출처
 // /api/pdf/[id]에서 로드 → CORS 무관), 오른쪽 = 표 추출 결과(다음 증분에서 채움).
@@ -37,6 +37,70 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   // 오른쪽(작업) 단 너비 — 드래그로 조절(작은 모니터 대응).
   const [rightWidth, setRightWidth] = useState(400);
+
+  // 배치로 미리 뽑아둔 저장본(draft/published). 있으면 "검수 모드"가 된다.
+  const [drafts, setDrafts] = useState<Dataset[] | null>(null);
+  const [activeDraft, setActiveDraft] = useState<Dataset | null>(null);
+  // 시행 일자 확인 게이트 — 체크해야 공개 가능.
+  const [dateConfirmed, setDateConfirmed] = useState(false);
+  const reviewMode = !!(drafts && drafts.length > 0);
+
+  const loadDrafts = useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/pdf/${source.id}/drafts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const { datasets } = (await res.json()) as { datasets: Dataset[] };
+        setDrafts(datasets);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [user, source.id]);
+
+  useEffect(() => {
+    void loadDrafts();
+  }, [loadDrafts]);
+
+  // 요강에서 확인되는 대표 일자(PDF 실제 날짜) — 검수자가 시기를 눈으로 확인하도록.
+  // 이미 뽑아둔 일정표 draft 행에서 날짜 패턴을 찾는다(접수일 우선). 추가 비용 0.
+  const detectedDate = useMemo(() => {
+    if (!drafts) return null;
+    const re = /20\d{2}\s*[.\-]\s*\d{1,2}\s*[.\-]\s*\d{1,2}/;
+    let fallback: { date: string; where: string } | null = null;
+    for (const d of drafts) {
+      for (const row of d.rows) {
+        const text = row.join(" ");
+        const m = text.match(re);
+        if (!m) continue;
+        const hit = { date: m[0].replace(/\s+/g, ""), where: d.title };
+        if (/접수/.test(text)) return hit;
+        if (!fallback) fallback = hit;
+      }
+    }
+    return fallback;
+  }, [drafts]);
+
+  function shortTitle(t: string): string {
+    return t.startsWith(source.university + " ") ? t.slice(source.university.length + 1) : t;
+  }
+
+  function openDraft(d: Dataset) {
+    setActiveDraft(d);
+    setActiveTable({
+      id: d.id,
+      title: shortTitle(d.title),
+      page: d.sourcePage ?? 1,
+      endPage: d.sourceEndPage,
+      kind: "기타",
+      hasNotes: false,
+      location: "",
+    });
+    setPage(Math.max(1, Math.min(numPages || (d.sourcePage ?? 1), d.sourcePage ?? 1)));
+  }
 
   // 문서 1회 로드.
   useEffect(() => {
@@ -159,6 +223,7 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
   }
 
   function selectTable(t: TableMapEntry) {
+    setActiveDraft(null); // 라이브 추출 경로 — 저장본 아님
     setActiveTable(t);
     setPage(Math.max(1, Math.min(numPages || t.page, t.page)));
   }
@@ -274,95 +339,199 @@ export function PdfWorkbench({ source }: { source: PdfSource }) {
         >
           {activeTable ? (
             <TableExtractPanel
+              key={activeTable.id}
               source={source}
               table={activeTable}
-              onBack={() => setActiveTable(null)}
+              preloaded={
+                activeDraft
+                  ? ({
+                      datasetId: activeDraft.id,
+                      title: activeDraft.title,
+                      category: activeDraft.category,
+                      schoolLevel: activeDraft.schoolLevel,
+                      columns: activeDraft.columns,
+                      rows: activeDraft.rows,
+                      customFields: activeDraft.customFields,
+                    } satisfies PreloadedDraft)
+                  : undefined
+              }
+              canPublish={dateConfirmed}
+              onBack={() => {
+                setActiveTable(null);
+                setActiveDraft(null);
+              }}
               onSaved={(tableId) => {
                 setSavedIds((s) => new Set(s).add(tableId));
                 setActiveTable(null);
+                setActiveDraft(null);
+                void loadDrafts();
               }}
             />
           ) : (
             <>
               <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-                <h2 className="text-sm font-semibold">표 목록</h2>
-                {tables && <span className="text-xs text-muted">{tables.length}개</span>}
+                <h2 className="text-sm font-semibold">
+                  {reviewMode ? "검수 대기 표" : "표 목록"}
+                </h2>
+                <span className="text-xs text-muted">
+                  {reviewMode ? `${drafts!.length}개` : tables ? `${tables.length}개` : ""}
+                </span>
               </div>
 
-              <div className="flex-1 overflow-auto p-3">
-            {!tables && !mapping && (
-              <div className="flex flex-col gap-3">
-                <p className="text-xs leading-relaxed text-muted">
-                  AI가 이 요강의 표를 찾아 목록으로 만듭니다. 표를 누르면 왼쪽 원본이
-                  그 페이지로 이동해요.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void runMap()}
-                  className="self-start rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                >
-                  표 목록 만들기
-                </button>
-                {!user && (
-                  <p className="text-xs text-muted">
-                    로그인 후 이용할 수 있어요. (AI 추출은 유료)
+              <div className="flex flex-1 flex-col gap-3 overflow-auto p-3">
+                {reviewMode && (
+                  <>
+                    {/* 시행 일자 확인 게이트 — PDF 실제 날짜로 시기 확인 후 공개 */}
+                    <div className="rounded-lg border border-brand/40 bg-brand-soft/40 p-2.5">
+                      <p className="text-xs font-semibold text-brand">📅 시행 일자 확인</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-foreground/80">
+                        {detectedDate ? (
+                          <>
+                            요강에서 확인된 일자: <b>{detectedDate.date}</b>{" "}
+                            <span className="text-muted">({shortTitle(detectedDate.where).slice(0, 16)}…)</span>
+                            <br />
+                            등록 학년도 <b>{source.admissionYear}</b>와 맞는지 왼쪽 원본으로 확인하세요.
+                          </>
+                        ) : (
+                          <>
+                            일정표에서 날짜를 자동 인식하지 못했어요. 왼쪽 원본의 일정으로{" "}
+                            <b>{source.admissionYear}학년도</b>가 맞는지 직접 확인하세요.
+                          </>
+                        )}
+                      </p>
+                      <label className="mt-2 flex items-start gap-2 text-[11px] font-medium text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={dateConfirmed}
+                          onChange={(e) => setDateConfirmed(e.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span>시행 일자 확인함 — {source.admissionYear}학년도가 맞습니다 (체크해야 공개 가능)</span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      {drafts!.map((d) => {
+                        const published = d.status === "published";
+                        return (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => openDraft(d)}
+                            className={
+                              "flex flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors " +
+                              (published
+                                ? "border-green-500/40 bg-green-50/50"
+                                : "border-border hover:border-brand")
+                            }
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {published ? (
+                                <span className="text-[10px] font-medium text-green-600">✓ 공개됨</span>
+                              ) : (
+                                <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                                  검수 대기
+                                </span>
+                              )}
+                              <span className="ml-auto text-[10px] text-muted">
+                                {d.sourcePage}
+                                {d.sourceEndPage && d.sourceEndPage > (d.sourcePage ?? 0)
+                                  ? `~${d.sourceEndPage}`
+                                  : ""}
+                                p · {d.rowCount}행
+                              </span>
+                            </div>
+                            <span className="text-xs leading-snug">{shortTitle(d.title)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {!reviewMode && !tables && !mapping && (
+                  <div className="flex flex-col gap-3">
+                    <p className="text-xs leading-relaxed text-muted">
+                      AI가 이 요강의 표를 찾아 목록으로 만듭니다. 표를 누르면 왼쪽 원본이
+                      그 페이지로 이동해요.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void runMap()}
+                      className="self-start rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                    >
+                      표 목록 만들기
+                    </button>
+                    {!user && (
+                      <p className="text-xs text-muted">로그인 후 이용할 수 있어요. (AI 추출은 유료)</p>
+                    )}
+                  </div>
+                )}
+
+                {reviewMode && !tables && !mapping && (
+                  <button
+                    type="button"
+                    onClick={() => void runMap()}
+                    className="self-start text-[11px] text-muted hover:text-brand"
+                  >
+                    ＋ 이 요강에서 표 더 찾기 (추가 추출 · 유료)
+                  </button>
+                )}
+
+                {mapping && (
+                  <p className="text-sm text-muted">
+                    표를 찾는 중… (요강 분량에 따라 1~2분 걸릴 수 있어요)
                   </p>
                 )}
-              </div>
-            )}
+                {mapError && <p className="text-sm text-red-600">{mapError}</p>}
 
-            {mapping && (
-              <p className="text-sm text-muted">
-                표를 찾는 중… (요강 분량에 따라 1~2분 걸릴 수 있어요)
-              </p>
-            )}
-            {mapError && <p className="text-sm text-red-600">{mapError}</p>}
-
-            {tables && (
-              <div className="flex flex-col gap-1.5">
-                {tables.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => selectTable(t)}
-                    className={
-                      "flex flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors " +
-                      (savedIds.has(t.id)
-                        ? "border-brand/40 bg-brand-soft/50"
-                        : "border-border hover:border-brand")
-                    }
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                        {t.kind}
-                      </span>
-                      {t.hasNotes && (
-                        <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-                          style={{ background: "#FAEEDA", color: "#854F0B" }}
-                          title="※ 주석 있음"
-                        >
-                          ※
-                        </span>
-                      )}
-                      {savedIds.has(t.id) && (
-                        <span
-                          className="text-[10px] font-medium text-green-600"
-                          title="저장됨"
-                        >
-                          ✓ 저장됨
-                        </span>
-                      )}
-                      <span className="ml-auto text-[10px] text-muted">
-                        {t.page}
-                        {t.endPage && t.endPage > t.page ? `~${t.endPage}` : ""}p
-                      </span>
-                    </div>
-                    <span className="text-xs leading-snug">{t.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+                {tables && (
+                  <div className="flex flex-col gap-1.5">
+                    {reviewMode && (
+                      <p className="text-[11px] font-semibold text-muted">
+                        새로 찾은 표 (추출 필요 · 유료)
+                      </p>
+                    )}
+                    {tables.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => selectTable(t)}
+                        className={
+                          "flex flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors " +
+                          (savedIds.has(t.id)
+                            ? "border-brand/40 bg-brand-soft/50"
+                            : "border-border hover:border-brand")
+                        }
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                            {t.kind}
+                          </span>
+                          {t.hasNotes && (
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                              style={{ background: "#FAEEDA", color: "#854F0B" }}
+                              title="※ 주석 있음"
+                            >
+                              ※
+                            </span>
+                          )}
+                          {savedIds.has(t.id) && (
+                            <span className="text-[10px] font-medium text-green-600" title="저장됨">
+                              ✓ 저장됨
+                            </span>
+                          )}
+                          <span className="ml-auto text-[10px] text-muted">
+                            {t.page}
+                            {t.endPage && t.endPage > t.page ? `~${t.endPage}` : ""}p
+                          </span>
+                        </div>
+                        <span className="text-xs leading-snug">{t.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
