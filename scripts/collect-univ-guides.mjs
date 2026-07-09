@@ -11,6 +11,7 @@
 // status: ok(업로드됨/현행) · updated(이번에 갱신) · unchanged(동일) · check(의심) · fail(실패)
 import crypto from "node:crypto";
 import fs from "node:fs";
+import http from "node:http";
 import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,7 +36,8 @@ const mode = process.argv[2] || "all";
 
 function download(url, redirects = 5) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { rejectUnauthorized: false, headers: { "User-Agent": "Mozilla/5.0" } }, (r) => {
+    const mod = url.startsWith("http://") ? http : https;
+    const req = mod.get(url, { rejectUnauthorized: false, headers: { "User-Agent": "Mozilla/5.0" } }, (r) => {
       if ([301, 302, 303, 307, 308].includes(r.statusCode) && r.headers.location && redirects > 0) {
         r.resume();
         return resolve(download(new URL(r.headers.location, url).toString(), redirects - 1));

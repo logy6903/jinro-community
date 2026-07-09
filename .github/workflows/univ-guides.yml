@@ -1,0 +1,50 @@
+name: univ-guides-watch
+
+# 매일 리더 대학(bellwether) 요강을 확인 → 변경/신규면 전체 대학을 스윕해
+# Firebase Storage에 업로드하고, 갱신된 docs/univ-guides.json(해시 상태)을 커밋.
+# 요강은 연 1~2회만 바뀌므로 대부분 no-op (HTTP 몇 회, 비용 0).
+on:
+  schedule:
+    - cron: "0 21 * * *" # 21:00 UTC = 06:00 KST 매일
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "bellwether(리더만) | all(전체 강제 스윕)"
+        default: "bellwether"
+
+permissions:
+  contents: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Restore service account
+        run: printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > service-account.json
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Watch & collect
+        run: node scripts/collect-univ-guides.mjs "${{ github.event.inputs.mode || 'bellwether' }}"
+
+      - name: Cleanup secret
+        if: always()
+        run: rm -f service-account.json
+
+      - name: Persist updated hash state
+        run: |
+          if [ -n "$(git status --porcelain docs/univ-guides.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add docs/univ-guides.json
+            git commit -m "chore: 요강 상태 갱신 (자동)"
+            git push
+          fi

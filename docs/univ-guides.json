@@ -50,9 +50,14 @@
       "examYear": 2025,
       "targetGrade": "2025년 수능 응시생 (현재 고3)",
       "bellwether": true,
-      "sourceUrl": null,
-      "note": "sourceUrl 없음",
-      "status": "fail"
+      "sourceUrl": "https://cdn013.negagea.net/dgsmidc/omr/seoul/web/univ_info2025/%EA%B3%A0%EB%A0%A4%EB%8C%80%ED%95%99%EA%B5%90/%EA%B3%A0%EB%A0%A4%EB%8C%80%ED%95%99%EA%B5%90_2026%ED%95%99%EB%85%84%EB%8F%84_%EC%88%98%EC%8B%9C%EB%AA%A8%EC%A7%91%EC%9A%94%EA%B0%95.pdf",
+      "sourceNote": "미러(cdn013, 비공식) — 공식은 oku.korea.ac.kr board형이라 직링크 없음",
+      "originalPath": "originals/korea-2026-susi.pdf",
+      "downloadToken": "d4778ae5-8ffe-4835-91c1-60da07523cf1",
+      "publicUrl": "https://firebasestorage.googleapis.com/v0/b/jinro-community.firebasestorage.app/o/originals%2Fkorea-2026-susi.pdf?alt=media&token=d4778ae5-8ffe-4835-91c1-60da07523cf1",
+      "contentHash": "5904d3fb2c9bb1ca88e9ad35ba805c69edb6ba31b5a568a6246f9c96577c0f43",
+      "sizeMB": 0.9,
+      "status": "ok"
     },
     {
       "id": "skku-2026-susi",
@@ -138,9 +143,10 @@
       "admissionYear": 2026,
       "examYear": 2025,
       "targetGrade": "2025년 수능 응시생 (현재 고3)",
-      "sourceUrl": "https://www.kaist.ac.kr/_prog/download/?file_id=ed1d54nmnbue8xsrzfdlthguemgr6i",
-      "status": "check",
-      "note": "의심: 0.2MB"
+      "sourceUrl": "http://www.skoschool.com/Content/post/16853_1_2026%ED%95%99%EB%85%84%EB%8F%84_KAIST_%ED%95%99%EC%82%AC%EA%B3%BC%EC%A0%95_%EB%AA%A8%EC%A7%91%EC%9A%94%EA%B0%95.pdf",
+      "sourceNote": "미러(skoschool, 비공식) — KAIST 공식은 페이지형",
+      "status": "fail",
+      "note": "HTTP 404"
     },
     {
       "id": "postech-2026",
