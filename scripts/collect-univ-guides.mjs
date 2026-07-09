@@ -35,6 +35,7 @@ const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
 const mode = process.argv[2] || "all";
 
 function download(url, redirects = 5) {
+  try { url = new URL(url).href; } catch { /* leave as-is */ } // 공백·한글 raw URL 자동 인코딩(기존 %xx는 보존)
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("http://") ? http : https;
     const req = mod.get(url, { rejectUnauthorized: false, headers: { "User-Agent": "Mozilla/5.0" } }, (r) => {
