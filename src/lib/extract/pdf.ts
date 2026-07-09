@@ -87,18 +87,23 @@ function str(v: unknown, max = 300): string {
 export async function mapTables(pdfBase64: string): Promise<TableMap | null> {
   const c = getClient();
   if (!c) return null;
-  const res = await c.messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    thinking: { type: "adaptive" },
-    system: MAP_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: [pdfBlock(pdfBase64), { type: "text", text: "이 PDF의 모든 표를 지도로 만들어줘." }],
-      },
-    ],
-  });
+  // adaptive thinking이 예산을 상당히 먹어, 8000이면 표가 많은 요강에서 JSON 출력이
+  // 잘려 파싱 실패(null)가 났다 → 상향. 단 큰 max_tokens는 SDK의 "10분 초과 가능"
+  // 가드에 걸려 스트리밍이 필수라, stream + finalMessage로 받는다(동작은 create와 동일).
+  const res = await c.messages
+    .stream({
+      model: MODEL,
+      max_tokens: 24000,
+      thinking: { type: "adaptive" },
+      system: MAP_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [pdfBlock(pdfBase64), { type: "text", text: "이 PDF의 모든 표를 지도로 만들어줘." }],
+        },
+      ],
+    })
+    .finalMessage();
   const parsed = parseJson(textOf(res)) as {
     tables?: unknown;
     pageCount?: unknown;
@@ -137,18 +142,22 @@ export async function extractTable(
   const c = getClient();
   if (!c) return null;
   const instruction = `추출 대상 표: 제목="${ref.title}", 페이지=${ref.page}. 이 페이지의 이 표만 정규화 롱포맷으로 추출하고, 표 바깥 주석은 조건으로 함께 담아줘.`;
-  const res = await c.messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    system: EXTRACT_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: [pdfBlock(pdfBase64), { type: "text", text: instruction }],
-      },
-    ],
-  });
+  // 롱포맷 표는 행이 많아(최대 500행) 출력이 크다 + adaptive thinking 예산까지 →
+  // 큰 max_tokens. SDK 10분 가드 회피 위해 스트리밍으로 받는다.
+  const res = await c.messages
+    .stream({
+      model: MODEL,
+      max_tokens: 32000,
+      thinking: { type: "adaptive" },
+      system: EXTRACT_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [pdfBlock(pdfBase64), { type: "text", text: instruction }],
+        },
+      ],
+    })
+    .finalMessage();
   const parsed = parseJson(textOf(res)) as {
     columns?: unknown;
     rows?: unknown;
