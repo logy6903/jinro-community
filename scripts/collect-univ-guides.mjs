@@ -38,7 +38,10 @@ function download(url, redirects = 5) {
   try { url = new URL(url).href; } catch { /* leave as-is */ } // 공백·한글 raw URL 자동 인코딩(기존 %xx는 보존)
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("http://") ? http : https;
-    const req = mod.get(url, { rejectUnauthorized: false, headers: { "User-Agent": "Mozilla/5.0" } }, (r) => {
+    let referer; try { referer = new URL(url).origin + "/"; } catch { /* ignore */ }
+    const headers = { "User-Agent": "Mozilla/5.0", Accept: "application/pdf,*/*" };
+    if (referer) headers.Referer = referer; // 일부 입학처 핫링크 차단 대비(조선대 등)
+    const req = mod.get(url, { rejectUnauthorized: false, headers }, (r) => {
       if ([301, 302, 303, 307, 308].includes(r.statusCode) && r.headers.location && redirects > 0) {
         r.resume();
         return resolve(download(new URL(r.headers.location, url).toString(), redirects - 1));
@@ -49,7 +52,7 @@ function download(url, redirects = 5) {
       r.on("end", () => resolve({ status: 200, buffer: Buffer.concat(chunks) }));
     });
     req.on("error", reject);
-    req.setTimeout(60000, () => req.destroy(new Error("timeout")));
+    req.setTimeout(120000, () => req.destroy(new Error("timeout")));
   });
 }
 
@@ -113,6 +116,10 @@ if (mode === "bellwether") {
     console.log("리더 변경 없음 → 전체 스윕 생략");
     summary = lc;
   }
+} else if (mode === "queued") {
+  const q = meta.items.filter((i) => i.status === "queued");
+  console.log(`=== 대기(queued) ${q.length}곳만 수집 ===`);
+  summary = await run(q);
 } else {
   summary = await run(meta.items);
 }
