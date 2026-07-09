@@ -9,6 +9,7 @@ import type {
 } from "@/lib/domain/types";
 import type { ExtractedNote, ExtractedTable, TableKind, TableMapEntry } from "@/lib/extract/types";
 import { mergeNotes } from "@/lib/extract/merge";
+import { TAG_SPECS } from "@/lib/datasets/tags";
 import {
   DATASET_CATEGORY_LABEL,
   DATASET_LEVEL_LABEL,
@@ -68,6 +69,9 @@ export function TableExtractPanel({
   const [title, setTitle] = useState(`${source.university} ${table.title}`);
   const [category, setCategory] = useState<DatasetCategory>(kindToCategory(table.kind));
   const [schoolLevel, setSchoolLevel] = useState<DatasetLevel>("high");
+  // 분류 태그(customFields). 입결의 지표·기준처럼 "이 숫자가 무엇인지"를 봉투에 명시.
+  const [tags, setTags] = useState<{ key: string; value: string }[]>([]);
+  const tagSpecs = TAG_SPECS[category] ?? [];
 
   async function runExtract() {
     if (extracting) return;
@@ -120,6 +124,15 @@ export function TableExtractPanel({
   function removeNote(i: number) {
     setNotes((ns) => ns.filter((_, idx) => idx !== i));
   }
+  function addTag(key = "") {
+    setTags((t) => [...t, { key, value: "" }]);
+  }
+  function setTag(i: number, field: "key" | "value", v: string) {
+    setTags((t) => t.map((row, idx) => (idx === i ? { ...row, [field]: v } : row)));
+  }
+  function removeTag(i: number) {
+    setTags((t) => t.filter((_, idx) => idx !== i));
+  }
 
   async function save() {
     if (!user || saving || !title.trim() || columns.length === 0) return;
@@ -127,6 +140,10 @@ export function TableExtractPanel({
     setError(null);
     try {
       const merged = mergeNotes({ columns, rows, notes, confidence: confidence ?? 0.5 });
+      // 분류 태그를 봉투 customFields 앞쪽에 병합(주석 파생분보다 우선 노출).
+      const tagFields = tags
+        .map((t) => ({ key: t.key.trim(), value: t.value.trim() }))
+        .filter((t) => t.key && t.value);
       const token = await user.getIdToken();
       const res = await fetch("/api/datasets", {
         method: "POST",
@@ -141,7 +158,7 @@ export function TableExtractPanel({
             schoolLevel,
             year: String(source.admissionYear),
             source: `${source.university} ${source.docType}`,
-            customFields: merged.customFields,
+            customFields: [...tagFields, ...merged.customFields],
           },
           columns: merged.columns,
           rows: merged.rows,
@@ -311,6 +328,74 @@ export function TableExtractPanel({
                   ))}
                 </select>
               </div>
+
+              {/* 분류 태그 — "이 숫자가 무엇인지"를 봉투에 명시(검색·비교 정확도). */}
+              <div className="flex flex-col gap-1.5 rounded-lg border border-border p-2">
+                <span className="text-xs font-semibold text-muted">
+                  분류 태그 <span className="font-normal">— 검색·비교용 (예: 지표=70%컷)</span>
+                </span>
+                {tagSpecs.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {tagSpecs.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => addTag(s.key)}
+                        title={s.hint}
+                        className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:border-brand hover:text-brand"
+                      >
+                        + {s.key}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {tags.map((t, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <input
+                      value={t.key}
+                      onChange={(e) => setTag(i, "key", e.target.value)}
+                      placeholder="항목"
+                      list="tagkeys"
+                      className="w-28 shrink-0 rounded border border-border bg-card px-2 py-1 text-xs outline-none focus:border-brand"
+                    />
+                    <input
+                      value={t.value}
+                      onChange={(e) => setTag(i, "value", e.target.value)}
+                      placeholder="값"
+                      list={`tagval-${t.key}`}
+                      className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs outline-none focus:border-brand"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeTag(i)}
+                      aria-label="태그 삭제"
+                      className="shrink-0 px-1 text-muted hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => addTag()}
+                  className="self-start text-[11px] text-brand hover:underline"
+                >
+                  + 태그 추가
+                </button>
+                <datalist id="tagkeys">
+                  {tagSpecs.map((s) => (
+                    <option key={s.key} value={s.key} />
+                  ))}
+                </datalist>
+                {tagSpecs.map((s) => (
+                  <datalist id={`tagval-${s.key}`} key={s.key}>
+                    {s.values.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                ))}
+              </div>
+
               <p className="text-[11px] text-muted">
                 출처: {source.university} {source.docType} · {source.admissionYear}학년도
               </p>

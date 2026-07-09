@@ -150,11 +150,23 @@ export interface DatasetEnvelope {
   customFields: CustomField[];
 }
 
+/**
+ * 검수·공개 상태. "검수 후 공개" 원칙을 데이터로 강제하는 스위치.
+ * 챗봇은 published(+legacy=필드 없음)만 노출하고 draft는 감춘다.
+ */
+export type DatasetStatus = "draft" | "published";
+
 /** 봉투 + 내용물(헤더 행 = columns, 데이터 행 = rows). */
 export interface Dataset extends DatasetEnvelope {
   id: string;
   authorUid: string;
   authorName: string;
+  /** 공개 상태. 없으면(legacy) 공개로 취급. */
+  status?: DatasetStatus;
+  /** 원본과 대조·확정한 검수자 표시명. */
+  reviewedBy?: string;
+  /** 검수/공개 시각 ISO. */
+  reviewedAt?: string;
   /** 엑셀 헤더 행. */
   columns: string[];
   /** 데이터 행들 (저장 상한까지). */

@@ -201,6 +201,11 @@ function DatasetCard({ d }: { d: LocalDataset }) {
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         {d.source && <span>출처: {d.source}</span>}
+        {d.reviewedBy && (
+          <span className="rounded-full bg-brand-soft px-2 py-0.5 font-medium text-brand">
+            검수 ✓ {d.reviewedBy}
+          </span>
+        )}
         {d.sourceId && d.sourcePage && (
           <a
             href={`/api/pdf/${d.sourceId}/page?start=${d.sourcePage}&end=${d.sourceEndPage ?? d.sourcePage}`}

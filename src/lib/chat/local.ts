@@ -40,6 +40,8 @@ export interface LocalDataset {
   sourceId?: string;
   sourcePage?: number;
   sourceEndPage?: number;
+  /** 원본 대조·확정한 검수자 (있으면 "검수 ✓" 표시). */
+  reviewedBy?: string;
 }
 export interface LocalMaterial {
   title: string;
@@ -67,7 +69,8 @@ export async function answerLocal(question: string): Promise<LocalAnswer> {
   }
 
   // ① 데이터셋: 봉투로 찾고, 큰 표는 질문 매칭 행만(작은 표는 통째).
-  const envs = await listDatasets();
+  // "검수 후 공개" 게이트 — draft는 챗봇 노출에서 제외(legacy=필드 없음은 공개).
+  const envs = (await listDatasets()).filter((d) => d.status !== "draft");
   const pickedDs = envs
     .map((d) => ({
       d,
@@ -108,6 +111,7 @@ export async function answerLocal(question: string): Promise<LocalAnswer> {
       sourceId: full.sourceId,
       sourcePage: full.sourcePage,
       sourceEndPage: full.sourceEndPage,
+      reviewedBy: full.reviewedBy,
     });
   }
 

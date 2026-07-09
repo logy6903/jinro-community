@@ -4,6 +4,7 @@ import type {
   DatasetCategory,
   DatasetEnvelope,
   DatasetLevel,
+  DatasetStatus,
 } from "../domain/types";
 import { getAdminDb } from "../firebase/admin";
 
@@ -50,6 +51,8 @@ export interface DatasetInput {
   sourcePage?: number;
   /** 여러 페이지 표면 끝 페이지. */
   sourceEndPage?: number;
+  /** 공개 상태. 생략 시 "published"(사람이 대조·저장 = 검수됨). */
+  status?: DatasetStatus;
 }
 
 /** Validate + normalize an upload. Returns null when structurally invalid. */
@@ -94,6 +97,8 @@ export function sanitizeDatasetInput(raw: unknown): DatasetInput | null {
   const originalUrl = str(r.originalUrl, 500) || undefined;
   const sourcePage = pageNum(r.sourcePage);
   const sourceEndPage = pageNum(r.sourceEndPage) ?? sourcePage;
+  // 명시적으로 draft로 보낸 경우만 미공개. 기본은 published(사람 저장 = 검수됨).
+  const status: DatasetStatus = r.status === "draft" ? "draft" : "published";
 
   return {
     envelope: { title, category, schoolLevel, year, source, customFields },
@@ -104,6 +109,7 @@ export function sanitizeDatasetInput(raw: unknown): DatasetInput | null {
     originalUrl,
     sourcePage,
     sourceEndPage,
+    status,
   };
 }
 
@@ -123,6 +129,7 @@ function str(v: unknown, max: number): string {
 
 function toDataset(id: string, data: FirebaseFirestore.DocumentData): Dataset {
   const createdAt = data.createdAt as Timestamp | undefined;
+  const reviewedAt = data.reviewedAt as Timestamp | undefined;
   let rows: string[][] = [];
   try {
     const parsed = JSON.parse(data.rowsJson ?? "[]");
@@ -147,6 +154,9 @@ function toDataset(id: string, data: FirebaseFirestore.DocumentData): Dataset {
     ...(data.originalUrl ? { originalUrl: data.originalUrl } : {}),
     ...(typeof data.sourcePage === "number" ? { sourcePage: data.sourcePage } : {}),
     ...(typeof data.sourceEndPage === "number" ? { sourceEndPage: data.sourceEndPage } : {}),
+    ...(data.status ? { status: data.status } : {}),
+    ...(data.reviewedBy ? { reviewedBy: data.reviewedBy } : {}),
+    ...(reviewedAt ? { reviewedAt: reviewedAt.toDate().toISOString() } : {}),
     createdAt: createdAt?.toDate().toISOString() ?? "",
   };
 }
@@ -157,6 +167,7 @@ export async function createDataset(
 ): Promise<string | null> {
   const db = getAdminDb();
   if (!db) return null;
+  const status: DatasetStatus = input.status ?? "published";
   const ref = await db.collection(DATASETS_COLLECTION).add({
     ...input.envelope,
     authorUid: author.uid,
@@ -169,6 +180,11 @@ export async function createDataset(
     ...(input.originalUrl ? { originalUrl: input.originalUrl } : {}),
     ...(input.sourcePage ? { sourcePage: input.sourcePage } : {}),
     ...(input.sourceEndPage ? { sourceEndPage: input.sourceEndPage } : {}),
+    // 공개 상태 + 검수 이력. published면 이 저장 행위 자체가 검수(원본 대조).
+    status,
+    ...(status === "published"
+      ? { reviewedBy: author.name, reviewedAt: FieldValue.serverTimestamp() }
+      : {}),
     createdAt: FieldValue.serverTimestamp(),
   });
   return ref.id;
