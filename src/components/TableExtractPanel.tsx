@@ -118,11 +118,29 @@ export function TableExtractPanel({
   function setHeader(ci: number, v: string) {
     setColumns((cs) => cs.map((c, i) => (i === ci ? v : c)));
   }
+  // 검수자가 추출 오류(빠진 행/열, 잘못된 행)를 직접 교정.
+  function addRow() {
+    setRows((rs) => [...rs, columns.map(() => "")]);
+  }
+  function deleteRow(ri: number) {
+    setRows((rs) => rs.filter((_, i) => i !== ri));
+  }
+  function addColumn() {
+    setColumns((cs) => [...cs, `열${cs.length + 1}`]);
+    setRows((rs) => rs.map((r) => [...r, ""]));
+  }
+  function deleteColumn(ci: number) {
+    setColumns((cs) => cs.filter((_, i) => i !== ci));
+    setRows((rs) => rs.map((r) => r.filter((_, i) => i !== ci)));
+  }
   function setNote(i: number, k: "text" | "appliesTo", v: string) {
     setNotes((ns) => ns.map((n, idx) => (idx === i ? { ...n, [k]: v } : n)));
   }
   function removeNote(i: number) {
     setNotes((ns) => ns.filter((_, idx) => idx !== i));
+  }
+  function addNote() {
+    setNotes((ns) => [...ns, { marker: "※", text: "", appliesTo: "" }]);
   }
   function addTag(key = "") {
     setTags((t) => [...t, { key, value: "" }]);
@@ -227,38 +245,82 @@ export function TableExtractPanel({
               </div>
             )}
 
-            {/* 편집 그리드 */}
-            <div className="overflow-x-auto">
-              <table className="border-collapse">
-                <thead>
-                  <tr>
-                    {columns.map((c, ci) => (
-                      <th key={ci} className="p-0">
-                        <input
-                          value={c}
-                          onChange={(e) => setHeader(ci, e.target.value)}
-                          className={`${cellClass} font-medium text-brand`}
-                        />
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, ri) => (
-                    <tr key={ri}>
-                      {columns.map((_, ci) => (
-                        <td key={ci} className="p-0">
-                          <input
-                            value={row[ci] ?? ""}
-                            onChange={(e) => setCell(ri, ci, e.target.value)}
-                            className={cellClass}
-                          />
-                        </td>
+            {/* 편집 그리드 — 셀 수정 + 행/열 추가·삭제로 추출 오류를 검수자가 교정 */}
+            <div className="flex flex-col gap-1.5">
+              <div className="overflow-x-auto">
+                <table className="border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="w-5 p-0" />
+                      {columns.map((c, ci) => (
+                        <th key={ci} className="p-0">
+                          <div className="flex items-center">
+                            <input
+                              value={c}
+                              onChange={(e) => setHeader(ci, e.target.value)}
+                              className={`${cellClass} w-full font-medium text-brand`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => deleteColumn(ci)}
+                              title="열 삭제"
+                              aria-label="열 삭제"
+                              className="shrink-0 px-1 text-[10px] text-muted hover:text-red-600"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, ri) => (
+                      <tr key={ri}>
+                        <td className="p-0 text-center align-middle">
+                          <button
+                            type="button"
+                            onClick={() => deleteRow(ri)}
+                            title="행 삭제"
+                            aria-label="행 삭제"
+                            className="px-0.5 text-[10px] text-muted hover:text-red-600"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                        {columns.map((_, ci) => (
+                          <td key={ci} className="p-0">
+                            <input
+                              value={row[ci] ?? ""}
+                              onChange={(e) => setCell(ri, ci, e.target.value)}
+                              className={cellClass}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addRow}
+                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
+                >
+                  + 행 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={addColumn}
+                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
+                >
+                  + 열 추가
+                </button>
+                <span className="ml-auto text-[10px] text-muted">
+                  {rows.length}행 × {columns.length}열
+                </span>
+              </div>
             </div>
 
             {/* 조건(주석) 편집 */}
@@ -293,6 +355,13 @@ export function TableExtractPanel({
                   />
                 </div>
               ))}
+              <button
+                type="button"
+                onClick={addNote}
+                className="self-start rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-brand hover:text-brand"
+              >
+                + 조건 추가
+              </button>
             </div>
 
             {/* 봉투 */}
