@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 // 헤더 내비. "쓰기(활용)"와 "올리기(기여)"를 행동 축으로 분리:
-//  - 직접 링크: 오늘 수업 · 챗봇 · 일정표 (매일 꺼내 쓰는 것)
+//  - 직접 링크: 챗봇 · 일정표 (매일 꺼내 쓰는 것)
 //  - 자료실 ▾: 데이터 · 자료 공유 · 정보 (둘러보는 지식 베이스)
 //  - 올리기 ▾: 엑셀 데이터 / 자료 공유 글 (기여, 로그인)
 //  - 수업앱 (도구)
@@ -72,12 +72,9 @@ export function HeaderNav() {
   return (
     <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
       <Link
-        href="/today"
+        href="/chat"
         className="text-sm font-medium text-brand hover:opacity-80"
       >
-        오늘 수업
-      </Link>
-      <Link href="/chat" className="text-sm text-muted hover:text-foreground">
         챗봇
       </Link>
       <Link href="/schedule" className="text-sm text-muted hover:text-foreground">
