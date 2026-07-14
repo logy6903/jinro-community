@@ -102,6 +102,12 @@ export function HeaderNav() {
       <Link href="/builder" className="text-sm text-muted hover:text-foreground">
         수업앱
       </Link>
+      <Link
+        href="/signup"
+        className="ml-auto rounded-full border border-border px-3 py-1 text-sm text-muted hover:border-brand hover:text-brand"
+      >
+        회원가입
+      </Link>
     </nav>
   );
 }
