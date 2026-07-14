@@ -1,26 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import {
-  MEMBER_STATUS_LABEL,
   REGIONS,
   type MemberSchoolLevel,
   type TeacherProfile,
 } from "@/lib/members/types";
 
-// 회원 가입 — Google 로그인 → 교사 프로필(이름·학교급·학교명·지역) 입력 →
-// 관리자 승인 후 기여 기능 사용. 로그인은 부가 레이어라 열람은 가입 없이도 가능.
+// 회원 가입 — Google 로그인 → 교사 프로필(이름·학교급·학교명·지역) 입력 → 즉시 가입.
+// 로그인은 부가 레이어라 열람은 가입 없이도 가능. 문제 계정은 관리자가 삭제.
 
 const inputClass =
   "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand";
-
-function statusClass(s: TeacherProfile["status"]): string {
-  const base = "rounded-xl px-4 py-3 text-sm leading-relaxed ";
-  if (s === "approved") return base + "bg-green-50 text-green-800";
-  if (s === "rejected") return base + "bg-red-50 text-red-700";
-  return base + "bg-amber-50 text-amber-800";
-}
 
 export default function SignupPage() {
   const { user, loading, signInWithGoogle } = useAuth();
@@ -33,6 +26,7 @@ export default function SignupPage() {
   const [region, setRegion] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -47,8 +41,11 @@ export default function SignupPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (cancelled) return;
-        const data = res.ok ? ((await res.json()) as { profile: TeacherProfile | null }) : { profile: null };
+        const data = res.ok
+          ? ((await res.json()) as { profile: TeacherProfile | null; admin?: boolean })
+          : { profile: null, admin: false };
         setProfile(data.profile);
+        setIsAdmin(!!data.admin);
         if (data.profile) {
           setName(data.profile.name);
           setSchoolLevel(data.profile.schoolLevel);
@@ -99,10 +96,18 @@ export default function SignupPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-bold">회원 가입</h1>
         <p className="text-sm text-muted">
-          Google로 로그인한 뒤 교사 정보를 입력하면, 관리자 승인 후 자료 업로드·검수
-          기능을 이용할 수 있어요. (열람은 가입 없이도 가능)
+          Google로 로그인한 뒤 교사 정보를 입력하면 바로 가입돼요. (열람은 가입 없이도 가능)
         </p>
       </div>
+
+      {isAdmin && (
+        <Link
+          href="/admin/members"
+          className="self-start text-sm font-medium text-brand hover:underline"
+        >
+          관리자: 회원 관리 →
+        </Link>
+      )}
 
       {!user ? (
         <button
@@ -118,13 +123,8 @@ export default function SignupPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {profile && (
-            <div className={statusClass(profile.status)}>
-              가입 상태: <b>{MEMBER_STATUS_LABEL[profile.status]}</b>
-              {profile.status === "pending" &&
-                " — 관리자 승인 후 기여 기능을 쓸 수 있어요. 정보는 아래에서 수정할 수 있습니다."}
-              {profile.status === "approved" &&
-                " — 승인 완료! 이제 자료 업로드·검수를 이용할 수 있어요."}
-              {profile.status === "rejected" && " — 정보를 보완해 다시 신청해주세요."}
+            <div className="rounded-xl bg-green-50 px-4 py-3 text-sm leading-relaxed text-green-800">
+              ✓ 가입되어 있어요. 아래에서 정보를 수정할 수 있습니다.
             </div>
           )}
 
@@ -167,7 +167,7 @@ export default function SignupPage() {
             disabled={saving}
             className="self-start rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? "저장 중…" : profile ? "정보 수정" : "가입 신청"}
+            {saving ? "저장 중…" : profile ? "정보 수정" : "가입하기"}
           </button>
           <p className="text-xs text-muted">가입 계정: {user.email}</p>
         </div>
