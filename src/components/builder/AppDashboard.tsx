@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type { BuilderApp, Submission } from "@/lib/builder/types";
 
@@ -16,6 +17,7 @@ export function AppDashboard({ appId }: { appId: string }) {
     "idle",
   );
   const [copied, setCopied] = useState(false);
+  const [qrBig, setQrBig] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -118,9 +120,45 @@ export function AppDashboard({ appId }: { appId: string }) {
               {copied ? "복사됨" : "복사"}
             </button>
           </div>
+
+          {shareUrl && (
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg border border-border bg-white p-2">
+                <QRCodeSVG value={shareUrl} size={96} />
+              </div>
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-xs text-muted">학생이 폰으로 스캔해 바로 접속</span>
+                <button
+                  type="button"
+                  onClick={() => setQrBig(true)}
+                  className="rounded-full border border-border px-3 py-1 text-xs hover:border-brand"
+                >
+                  QR 크게 보기 (교실 화면용)
+                </button>
+              </div>
+            </div>
+          )}
+
           <span className="text-xs text-muted">
             공유 코드 <span className="font-mono">{app.code}</span>
           </span>
+
+          {qrBig && shareUrl && (
+            <div
+              className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center gap-6 bg-white p-8"
+              onClick={() => setQrBig(false)}
+              role="button"
+              tabIndex={0}
+            >
+              <h2 className="text-center text-2xl font-bold text-neutral-900">{app.title}</h2>
+              <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+                <QRCodeSVG value={shareUrl} size={340} />
+              </div>
+              <p className="text-lg text-neutral-500">폰 카메라로 QR을 스캔하세요</p>
+              <code className="rounded-lg bg-brand-soft px-4 py-2 text-sm text-brand">{shareUrl}</code>
+              <span className="text-xs text-neutral-400">화면을 누르면 닫힘</span>
+            </div>
+          )}
         </div>
       </header>
 
