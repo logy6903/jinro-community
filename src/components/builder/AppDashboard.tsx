@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
+import * as XLSX from "xlsx";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type { BuilderApp, Submission } from "@/lib/builder/types";
 
@@ -64,6 +65,32 @@ export function AppDashboard({ appId }: { appId: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+  }
+
+  // 제출 표를 엑셀(.xlsx)로 저장. 장문 답변은 표보다 엑셀에서 열 넓혀 보는 게 편함.
+  function exportExcel() {
+    if (!app || submissions.length === 0) return;
+    const header = [
+      "학번",
+      "이름",
+      ...app.fields.map((f) => f.label),
+      ...app.aiBlocks.map((b) => `AI: ${b.title}`),
+      "제출 시각",
+    ];
+    const rows = submissions.map((s) => [
+      s.studentNo,
+      s.studentName,
+      ...app.fields.map((f) =>
+        s.answers[f.id] !== undefined ? String(s.answers[f.id]) : "",
+      ),
+      ...app.aiBlocks.map((b) => s.aiOutputs?.[b.id] ?? ""),
+      s.submittedAt.slice(0, 16).replace("T", " "),
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "제출");
+    const safe = (app.title || "제출").replace(/[\\/:*?"<>|]/g, " ").slice(0, 40);
+    XLSX.writeFile(wb, `${safe}_제출.xlsx`);
   }
 
   if (loading) return <p className="text-sm text-muted">···</p>;
@@ -163,9 +190,20 @@ export function AppDashboard({ appId }: { appId: string }) {
       </header>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-muted">
-          제출 {submissions.length}건
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-muted">
+            제출 {submissions.length}건
+          </h2>
+          {submissions.length > 0 && (
+            <button
+              type="button"
+              onClick={exportExcel}
+              className="ml-auto rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+            >
+              엑셀 다운로드
+            </button>
+          )}
+        </div>
         {submissions.length === 0 ? (
           <p className="text-sm text-muted">아직 제출이 없어요.</p>
         ) : (
