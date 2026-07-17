@@ -1,14 +1,19 @@
 import { getSourceById } from "@/lib/sources/repository";
 import { getAdminBucket } from "@/lib/firebase/admin";
+import { getSessionMember } from "@/lib/members/session";
 
 // GET /api/pdf/[id] — 원본 PDF를 동일 출처로 스트림한다.
 // 왜 프록시: pdf.js가 Firebase Storage URL을 직접 fetch하면 버킷 CORS 설정에
 // 의존해 깨질 수 있음. 서버가 대신 받아(admin) 동일 출처로 넘기면 CORS 무관.
+// 회원 전용 자료라 세션 게이트(쿠키라 <a>·pdf.js 요청에도 자동 적용).
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const member = await getSessionMember();
+  if (!member) return new Response("auth required", { status: 401 });
+
   const { id } = await params;
   const source = await getSourceById(id);
   const bucket = getAdminBucket();

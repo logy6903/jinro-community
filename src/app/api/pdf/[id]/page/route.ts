@@ -1,6 +1,7 @@
 import { extractPageRange } from "@/lib/extract/split";
 import { getSourceById } from "@/lib/sources/repository";
 import { getAdminBucket } from "@/lib/firebase/admin";
+import { getSessionMember } from "@/lib/members/session";
 
 // GET /api/pdf/[id]/page?start=N&end=M — 원본 PDF에서 [start..end] 페이지만 잘라
 // 다운로드시킨다. "출처를 밝히는 것"을 넘어 근거가 된 그 페이지를 그대로 손에 쥐게.
@@ -24,6 +25,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const member = await getSessionMember();
+  if (!member) return new Response("auth required", { status: 401 });
+
   const { id } = await params;
   const url = new URL(req.url);
   const start = toPage(url.searchParams.get("start"), 1);

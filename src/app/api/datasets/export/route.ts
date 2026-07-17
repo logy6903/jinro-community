@@ -1,13 +1,17 @@
 import { getDatasetById } from "@/lib/datasets/repository";
 import type { Dataset } from "@/lib/domain/types";
+import { getSessionMember } from "@/lib/members/session";
 
 // POST /api/datasets/export — 주어진 id들의 전체 데이터셋(행 포함)을 반환.
-// 엑셀 내보내기용. 읽기는 공개(양파구조)라 게이트 없음. 언어모델 미사용 —
-// 저장된 데이터를 그대로 돌려줄 뿐(결정론적, 할루시네이션 불가).
+// 엑셀 내보내기용. 언어모델 미사용 — 저장된 데이터를 그대로 돌려줄 뿐.
+// 회원 전용 서비스라 세션 게이트.
 
 const MAX_IDS = 80;
 
 export async function POST(req: Request) {
+  const member = await getSessionMember();
+  if (!member) return Response.json({ error: "auth_required" }, { status: 401 });
+
   const body = (await req.json().catch(() => null)) as { ids?: unknown } | null;
   const ids = Array.isArray(body?.ids)
     ? body.ids.filter((x): x is string => typeof x === "string").slice(0, MAX_IDS)
