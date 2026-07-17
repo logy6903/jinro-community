@@ -8,6 +8,11 @@ export interface TeacherProfile {
   uid: string;
   /** Google 계정 이메일 (토큰에서). */
   email: string;
+  /**
+   * SMS 인증을 마친 전화번호(E.164, 예: +821012345678). 클라이언트 입력이 아니라
+   * 검증된 토큰의 phone_number에서만 채운다 — 오타·위조가 원천적으로 불가능.
+   */
+  phone: string;
   name: string;
   schoolLevel: MemberSchoolLevel;
   schoolName: string;

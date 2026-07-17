@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  RecaptchaVerifier,
+  linkWithPhoneNumber,
+  type ConfirmationResult,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import {
   REGIONS,
@@ -14,6 +20,14 @@ import {
 
 const inputClass =
   "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand";
+
+/** 010-1234-5678 → +821012345678 (Firebase는 E.164만 받음). */
+function toE164(raw: string): string {
+  const d = raw.replace(/[^0-9]/g, "");
+  if (d.startsWith("82")) return "+" + d;
+  if (d.startsWith("0")) return "+82" + d.slice(1);
+  return "+82" + d;
+}
 
 export default function SignupPage() {
   const { user, loading, signInWithGoogle } = useAuth();
@@ -28,12 +42,73 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // 휴대폰 SMS 인증 — 오타 방지가 목적이라, 인증을 마쳐야 가입이 된다.
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [sending, setSending] = useState(false);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  async function sendCode() {
+    if (!user || !auth || sending) return;
+    const e164 = toE164(phone);
+    if (!/^\+82\d{9,10}$/.test(e164)) {
+      setError("휴대폰 번호를 정확히 입력해주세요. (예: 010-1234-5678)");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    try {
+      recaptchaRef.current?.clear();
+      const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible",
+      });
+      recaptchaRef.current = verifier;
+      setConfirmation(await linkWithPhoneNumber(user, e164, verifier));
+    } catch (e) {
+      const c = (e as { code?: string })?.code;
+      setError(
+        c === "auth/credential-already-in-use"
+          ? "이미 다른 계정에 등록된 번호예요."
+          : c === "auth/invalid-phone-number"
+            ? "번호 형식이 올바르지 않아요."
+            : c === "auth/too-many-requests"
+              ? "요청이 많아요. 잠시 후 다시 시도해주세요."
+              : "인증번호 발송에 실패했어요. 번호를 확인해주세요.",
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function verifyCode() {
+    if (!confirmation || !user || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await confirmation.confirm(code.trim());
+      await user.getIdToken(true); // phone_number 클레임이 실리도록 토큰 갱신
+      setPhoneVerified(true);
+      setConfirmation(null);
+    } catch {
+      setError("인증번호가 맞지 않아요. 다시 확인해주세요.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   useEffect(() => {
     if (!user) {
       setProfile(undefined);
       return;
     }
     let cancelled = false;
+    // 이미 번호가 계정에 연결돼 있으면 인증 단계를 건너뛴다.
+    if (user.phoneNumber) {
+      setPhone(user.phoneNumber);
+      setPhoneVerified(true);
+    }
     (async () => {
       try {
         const token = await user.getIdToken();
@@ -69,10 +144,15 @@ export default function SignupPage() {
       setError("이름과 학교명을 입력해주세요.");
       return;
     }
+    if (!phoneVerified) {
+      setError("휴대폰 인증을 먼저 완료해주세요.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
+      // 인증 직후의 phone_number 클레임이 확실히 실리도록 강제 갱신.
+      const token = await user.getIdToken(true);
       const res = await fetch("/api/teachers", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -133,6 +213,63 @@ export default function SignupPage() {
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} className={inputClass} placeholder="예: 김진로" />
           </label>
 
+          {/* 휴대폰 SMS 인증 — 오타 방지. 인증을 마쳐야 가입 버튼이 열린다. */}
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">
+              휴대폰 번호{" "}
+              {phoneVerified && <span className="text-green-600">✓ 인증됨</span>}
+            </span>
+            {phoneVerified ? (
+              <input value={phone} disabled className={`${inputClass} bg-neutral-50 text-muted`} />
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="010-1234-5678"
+                    inputMode="tel"
+                    disabled={!!confirmation}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendCode()}
+                    disabled={sending || !!confirmation}
+                    className="shrink-0 rounded-lg border border-border px-3 text-xs hover:border-brand disabled:opacity-50"
+                  >
+                    {confirmation ? "발송됨" : sending ? "발송 중…" : "인증번호 받기"}
+                  </button>
+                </div>
+                {confirmation && (
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="인증번호 6자리"
+                      inputMode="numeric"
+                      maxLength={6}
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void verifyCode()}
+                      disabled={sending}
+                      className="shrink-0 rounded-lg bg-brand px-4 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      확인
+                    </button>
+                  </div>
+                )}
+                <span className="text-xs text-muted">
+                  문자로 온 6자리 코드를 넣으면 번호가 확인돼요. (번호 오타 방지)
+                </span>
+              </>
+            )}
+          </div>
+          {/* Firebase Phone Auth가 요구하는 보이지 않는 reCAPTCHA 자리 */}
+          <div id="recaptcha-container" />
+
           <div className="flex gap-3">
             <label className="flex flex-1 flex-col gap-1 text-sm">
               <span className="font-medium">학교급</span>
@@ -164,7 +301,8 @@ export default function SignupPage() {
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={saving}
+            disabled={saving || !phoneVerified}
+            title={!phoneVerified ? "휴대폰 인증을 먼저 완료해주세요." : undefined}
             className="self-start rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "저장 중…" : profile ? "정보 수정" : "가입하기"}

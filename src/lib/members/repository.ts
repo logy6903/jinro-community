@@ -40,6 +40,7 @@ function toProfile(uid: string, d: FirebaseFirestore.DocumentData): TeacherProfi
   return {
     uid,
     email: d.email ?? "",
+    phone: d.phone ?? "",
     name: d.name ?? "",
     schoolLevel: d.schoolLevel === "high" ? "high" : "middle",
     schoolName: d.schoolName ?? "",
@@ -55,10 +56,12 @@ export async function getTeacherProfile(uid: string): Promise<TeacherProfile | n
   return doc.exists ? toProfile(uid, doc.data()!) : null;
 }
 
-/** 가입/프로필 수정. 새 문서면 createdAt 기록, 기존이면 필드만 갱신. */
+/** 가입/프로필 수정. email·phone은 검증된 토큰에서 온 값만 받는다(클라 입력 아님).
+ *  새 문서면 createdAt 기록, 기존이면 필드만 갱신. */
 export async function upsertTeacherProfile(
   uid: string,
   email: string,
+  phone: string,
   input: TeacherProfileInput,
 ): Promise<TeacherProfile | null> {
   const db = getAdminDb();
@@ -68,6 +71,7 @@ export async function upsertTeacherProfile(
   await ref.set(
     {
       email,
+      phone,
       ...input,
       ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     },
