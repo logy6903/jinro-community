@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-// 헤더 내비. "쓰기(활용)"와 "올리기(기여)"를 행동 축으로 분리:
+// 헤더 내비. "받기(열람)"와 "올리기(기여·생산)"를 두 개의 문으로 완전히 분리:
 //  - 직접 링크: 챗봇 · 일정표 (매일 꺼내 쓰는 것)
-//  - 자료실 ▾: 자료 공유(교사 기여) · 정보(AI 큐레이션) (둘러보는 지식 베이스)
-//  - 올리기 ▾: 요강/내신 작업실 · 자료 공유 글 (기여, 로그인)
+//  - 자료실 ▾ (받기, 비회원도 열람): 공유 자료 열람 · 정보(AI 큐레이션)
+//  - 작업실 ▾ (올리기, 로그인 필요): 요강 작업실 · 내신 검수 · 자료 공유 · 정보 검토
 //  - 수업앱 (도구)
 
 interface NavItem {
@@ -83,17 +83,18 @@ export function HeaderNav() {
       <Dropdown
         label="자료실"
         items={[
-          { href: "/board", label: "자료 공유" },
+          { href: "/board", label: "공유 자료 열람" },
           { href: "/info", label: "정보" },
         ]}
       />
       <Dropdown
-        label="올리기"
+        label="작업실"
         accent
         items={[
           { href: "/pdf", label: "요강 작업실 (PDF)" },
           { href: "/naeshin", label: "내신 검수 (베타)" },
-          { href: "/board/new", label: "자료 공유 글쓰기" },
+          { href: "/board/new", label: "자료 공유" },
+          { href: "/info/review", label: "정보 검토·보정" },
         ]}
       />
       <Link href="/builder" className="text-sm text-muted hover:text-foreground">
