@@ -14,6 +14,9 @@ export function MaterialCard({ material }: { material: SharedMaterial }) {
         <span className="rounded-full bg-brand-soft px-2 py-0.5 font-medium text-brand">
           {CATEGORY_EMOJI[material.category]} {CATEGORY_LABEL[material.category]}
         </span>
+        {material.attachments && material.attachments.length > 0 && (
+          <span>📎 {material.attachments.length}</span>
+        )}
         {material.usedCount > 0 && (
           <span>👩‍🏫 {material.usedCount}명이 수업에 사용</span>
         )}

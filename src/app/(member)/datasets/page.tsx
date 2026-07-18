@@ -15,9 +15,10 @@ export default async function DatasetsPage() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold">진학·진로 데이터</h1>
+          <h1 className="text-xl font-bold">진학 자료</h1>
           <p className="text-sm text-muted">
-            교사들이 정리한 표 자료. 챗봇이 여기서 찾아 답합니다.
+            공유 작업실에서 정리한 요강·입결 표. 챗봇이 여기서 찾아 답하고,
+            상세에서 엑셀·출처 PDF로 내려받을 수 있습니다.
           </p>
         </div>
         <Link

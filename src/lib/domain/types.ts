@@ -81,6 +81,8 @@ export interface SharedMaterial {
   title: string;
   summary: string;
   body: string;
+  /** 다운로드용 첨부 파일(Storage 토큰 URL). 없으면 텍스트 자료. */
+  attachments?: Attachment[];
   /** ISO timestamp. */
   createdAt: string;
   /** "실제 수업에 사용함" count (per-teacher dedup, same pattern as cards). */
@@ -94,6 +96,8 @@ export interface NewMaterialInput {
   title: string;
   summary: string;
   body: string;
+  /** 미리 업로드해 받은 첨부 {name,url} 목록 (URL은 서버가 자기 Storage만 허용). */
+  attachments: Attachment[];
 }
 
 /**

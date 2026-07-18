@@ -123,7 +123,8 @@ export function HeaderNav() {
         label="자료실"
         items={[
           { href: "/board", label: "수업 자료" },
-          { href: "/info", label: "진학 자료" },
+          { href: "/datasets", label: "진학 자료" },
+          { href: "/info", label: "소식·정보" },
         ]}
       />
       <Dropdown

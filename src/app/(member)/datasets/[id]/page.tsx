@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDatasetById } from "@/lib/datasets/repository";
+import { DatasetDownload } from "@/components/DatasetDownload";
 import {
   DATASET_CATEGORY_LABEL,
   DATASET_LEVEL_LABEL,
@@ -52,6 +53,16 @@ export default async function DatasetPage({
           </div>
         )}
       </header>
+
+      {/* 다운로드 (회원 전용 — 이 페이지 자체가 회원 게이트) */}
+      <DatasetDownload
+        title={dataset.title}
+        columns={dataset.columns}
+        rows={dataset.rows}
+        sourceId={dataset.sourceId}
+        sourcePage={dataset.sourcePage}
+        sourceEndPage={dataset.sourceEndPage}
+      />
 
       {/* 내용물 */}
       <div className="overflow-x-auto rounded-2xl border border-border">

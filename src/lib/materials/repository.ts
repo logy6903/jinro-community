@@ -1,5 +1,6 @@
 import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import type {
+  Attachment,
   NewMaterialInput,
   SchoolLevel,
   SharedMaterial,
@@ -27,9 +28,29 @@ function toMaterial(id: string, data: FirebaseFirestore.DocumentData): SharedMat
     title: data.title ?? "",
     summary: data.summary ?? "",
     body: data.body ?? "",
+    attachments: Array.isArray(data.attachments) ? (data.attachments as Attachment[]) : [],
     createdAt: createdAt?.toDate().toISOString() ?? "",
     usedCount: typeof data.usedCount === "number" ? data.usedCount : 0,
   };
+}
+
+const ATTACH_MAX = 5;
+
+/** 첨부 목록 검증: 이름 + 우리 Storage(firebasestorage) URL만 허용(임의 링크 주입 차단). */
+function sanitizeAttachments(raw: unknown): Attachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Attachment[] = [];
+  for (const a of raw) {
+    if (!a || typeof a !== "object") continue;
+    const r = a as Record<string, unknown>;
+    const name = typeof r.name === "string" ? r.name.trim().slice(0, 120) : "";
+    const url = typeof r.url === "string" ? r.url : "";
+    if (name && /^https:\/\/firebasestorage\.googleapis\.com\//.test(url)) {
+      out.push({ name, url });
+    }
+    if (out.length >= ATTACH_MAX) break;
+  }
+  return out;
 }
 
 /** Validate + normalize submitted fields. Returns null when invalid. */
@@ -44,8 +65,10 @@ export function sanitizeInput(raw: unknown): NewMaterialInput | null {
   const title = typeof r.title === "string" ? r.title.trim().slice(0, TITLE_MAX) : "";
   const summary = typeof r.summary === "string" ? r.summary.trim().slice(0, SUMMARY_MAX) : "";
   const body = typeof r.body === "string" ? r.body.trim().slice(0, BODY_MAX) : "";
-  if (!title || !body) return null;
-  return { schoolLevel, category, title, summary, body };
+  const attachments = sanitizeAttachments(r.attachments);
+  // 첨부가 있으면 본문 없이도 허용(파일만 공유하는 자료), 아니면 본문 필수.
+  if (!title || (!body && attachments.length === 0)) return null;
+  return { schoolLevel, category, title, summary, body, attachments };
 }
 
 export async function createMaterial(
