@@ -67,15 +67,21 @@ export default function SignupPage() {
       recaptchaRef.current = verifier;
       setConfirmation(await linkWithPhoneNumber(user, e164, verifier));
     } catch (e) {
-      const c = (e as { code?: string })?.code;
+      const c = (e as { code?: string })?.code ?? "unknown";
+      const map: Record<string, string> = {
+        "auth/operation-not-allowed":
+          "전화 로그인이 아직 켜지지 않았어요. (관리자: Firebase → Authentication → 전화 사용 설정·저장)",
+        "auth/unauthorized-domain":
+          "이 사이트 도메인이 Firebase 승인 도메인에 없어요. (관리자 설정 필요)",
+        "auth/credential-already-in-use": "이미 다른 계정에 등록된 번호예요.",
+        "auth/invalid-phone-number": "번호 형식이 올바르지 않아요.",
+        "auth/too-many-requests": "요청이 많아요. 잠시 후 다시 시도해주세요.",
+        "auth/requires-recent-login": "보안을 위해 다시 로그인한 뒤 시도해주세요.",
+        "auth/billing-not-enabled": "SMS를 보내려면 결제(Blaze)가 필요해요.",
+        "auth/captcha-check-failed": "reCAPTCHA 확인 실패 — 새로고침 후 다시 시도해주세요.",
+      };
       setError(
-        c === "auth/credential-already-in-use"
-          ? "이미 다른 계정에 등록된 번호예요."
-          : c === "auth/invalid-phone-number"
-            ? "번호 형식이 올바르지 않아요."
-            : c === "auth/too-many-requests"
-              ? "요청이 많아요. 잠시 후 다시 시도해주세요."
-              : "인증번호 발송에 실패했어요. 번호를 확인해주세요.",
+        (map[c] ?? "인증번호 발송에 실패했어요. 번호를 확인해주세요.") + ` [${c}]`,
       );
     } finally {
       setSending(false);
