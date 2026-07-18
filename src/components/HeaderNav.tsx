@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 
 // 헤더 내비. "쓰기(활용)"와 "올리기(기여)"를 행동 축으로 분리:
 //  - 직접 링크: 챗봇 · 일정표 (매일 꺼내 쓰는 것)
-//  - 자료실 ▾: 데이터 · 자료 공유 · 정보 (둘러보는 지식 베이스)
-//  - 올리기 ▾: 엑셀 데이터 / 자료 공유 글 (기여, 로그인)
+//  - 자료실 ▾: 자료 공유(교사 기여) · 정보(AI 큐레이션) (둘러보는 지식 베이스)
+//  - 올리기 ▾: 요강/내신 작업실 · 자료 공유 글 (기여, 로그인)
 //  - 수업앱 (도구)
 
 interface NavItem {
@@ -83,8 +83,6 @@ export function HeaderNav() {
       <Dropdown
         label="자료실"
         items={[
-          { href: "/datasets", label: "데이터" },
-          { href: "/collect", label: "데이터 정리·엑셀" },
           { href: "/board", label: "자료 공유" },
           { href: "/info", label: "정보" },
         ]}
@@ -96,7 +94,6 @@ export function HeaderNav() {
           { href: "/pdf", label: "요강 작업실 (PDF)" },
           { href: "/naeshin", label: "내신 검수 (베타)" },
           { href: "/board/new", label: "자료 공유 글쓰기" },
-          { href: "/datasets/new", label: "엑셀 직접 올리기 (내 자료)" },
         ]}
       />
       <Link href="/builder" className="text-sm text-muted hover:text-foreground">
