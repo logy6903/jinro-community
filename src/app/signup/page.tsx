@@ -60,21 +60,15 @@ export default function SignupPage() {
     setSending(true);
     setError(null);
     try {
-      // 재시도 시 "reCAPTCHA has already been rendered" 방지 — 이전 위젯을 완전히
-      // 정리하고(컨테이너 비우기 포함) 매번 새로 만든다.
-      try {
-        recaptchaRef.current?.clear();
-      } catch {
-        /* 이미 정리됐을 수 있음 */
+      // reCAPTCHA는 한 번만 만들어 재사용한다. 매번 새로 만들면 같은 컨테이너에
+      // 중복 렌더되어 "already rendered" 오류가 난다(재시도 시 재발). 재사용하면
+      // Firebase가 알아서 재실행하므로 재시도도 안전.
+      if (!recaptchaRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(auth, "recaptcha-container", {
+          size: "invisible",
+        });
       }
-      recaptchaRef.current = null;
-      const container = document.getElementById("recaptcha-container");
-      if (container) container.innerHTML = "";
-      const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible",
-      });
-      recaptchaRef.current = verifier;
-      setConfirmation(await linkWithPhoneNumber(user, e164, verifier));
+      setConfirmation(await linkWithPhoneNumber(user, e164, recaptchaRef.current));
     } catch (e) {
       const err = e as { code?: string; message?: string; name?: string };
       const c = err.code ?? "unknown";
