@@ -60,7 +60,16 @@ export default function SignupPage() {
     setSending(true);
     setError(null);
     try {
-      recaptchaRef.current?.clear();
+      // 재시도 시 "reCAPTCHA has already been rendered" 방지 — 이전 위젯을 완전히
+      // 정리하고(컨테이너 비우기 포함) 매번 새로 만든다.
+      try {
+        recaptchaRef.current?.clear();
+      } catch {
+        /* 이미 정리됐을 수 있음 */
+      }
+      recaptchaRef.current = null;
+      const container = document.getElementById("recaptcha-container");
+      if (container) container.innerHTML = "";
       const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
       });
