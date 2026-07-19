@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { HeaderQr } from "./HeaderQr";
 
 // 헤더 내비. 콘텐츠 축으로 재편 — "받기(열람)"와 "올리기(기여)"를 두 문으로 분리:
 //  - 직접 링크: 챗봇 · 일정표 (매일 꺼내 쓰는 것)
@@ -110,7 +109,7 @@ function Dropdown({
 
 export function HeaderNav() {
   return (
-    <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
+    <nav className="flex flex-1 flex-wrap items-center justify-evenly gap-x-4 gap-y-1">
       <Link
         href="/chat"
         className="text-sm font-medium text-brand hover:opacity-80"
@@ -147,15 +146,6 @@ export function HeaderNav() {
       <Link href="/builder" className="text-sm text-muted hover:text-foreground">
         수업앱
       </Link>
-      <div className="ml-auto flex items-center gap-3">
-        <HeaderQr />
-        <Link
-          href="/signup"
-          className="rounded-full border border-border px-3 py-1 text-sm text-muted hover:border-brand hover:text-brand"
-        >
-          회원가입
-        </Link>
-      </div>
     </nav>
   );
 }

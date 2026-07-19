@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthButton } from "@/components/AuthButton";
 import { HeaderNav } from "@/components/HeaderNav";
+import { HeaderQr } from "@/components/HeaderQr";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import "./globals.css";
 
@@ -21,17 +22,18 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <AuthProvider>
           <header className="border-b border-border bg-card">
-            <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
-              <div className="flex items-center gap-4">
-                <Link href="/" className="flex shrink-0 items-baseline gap-2">
-                  <span className="text-lg font-bold tracking-tight">
-                    진로교사 커뮤니티
-                  </span>
-                  <span className="text-xs text-muted">베타</span>
-                </Link>
-                <HeaderNav />
+            <div className="mx-auto flex max-w-6xl items-center gap-8 px-5 py-4">
+              <Link href="/" className="flex shrink-0 items-baseline gap-2">
+                <span className="text-lg font-bold tracking-tight">
+                  진로교사 커뮤니티
+                </span>
+                <span className="text-xs text-muted">베타</span>
+              </Link>
+              <HeaderNav />
+              <div className="flex shrink-0 items-center gap-3">
+                <HeaderQr />
+                <AuthButton />
               </div>
-              <AuthButton />
             </div>
           </header>
           <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6">
