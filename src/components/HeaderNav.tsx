@@ -109,7 +109,7 @@ function Dropdown({
 
 export function HeaderNav() {
   return (
-    <nav className="flex flex-1 flex-wrap items-center justify-evenly gap-x-4 gap-y-1">
+    <nav className="flex flex-1 flex-wrap items-center justify-center gap-x-8 gap-y-1">
       <Link
         href="/chat"
         className="text-sm font-medium text-brand hover:opacity-80"
