@@ -75,6 +75,21 @@ export default async function CardPage({
         <UsedButton cardId={card.id} initialCount={card.usedCount} />
       </div>
 
+      <Link
+        href={`/lessons/${card.id}`}
+        className="flex items-center justify-between gap-3 rounded-2xl border border-brand/40 bg-brand-soft/40 px-5 py-4 transition-colors hover:bg-brand-soft"
+      >
+        <span className="flex flex-col">
+          <span className="text-sm font-semibold text-brand">
+            이 자료로 차시별 수업안 만들기
+          </span>
+          <span className="text-xs text-muted">
+            몇 차시로, 어떻게 다룰지 정하면 AI가 계획 초안을 짜드립니다.
+          </span>
+        </span>
+        <span className="shrink-0 text-brand">→</span>
+      </Link>
+
       <p className="border-t border-border pt-4 text-xs leading-relaxed text-muted">
         출처 · {card.source}. 누구나 보고 공유할 수 있으며, 공유 시 출처 표기를
         남겨주세요.
