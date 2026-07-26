@@ -30,13 +30,30 @@ const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   choice: "객관식",
 };
 
-const CONTENT_TYPES: ContentType[] = ["text", "image", "pdf", "link"];
+const CONTENT_TYPES: ContentType[] = [
+  "text",
+  "image",
+  "pdf",
+  "office",
+  "link",
+];
 const CONTENT_TYPE_LABEL: Record<ContentType, string> = {
   text: "텍스트/지시문",
   image: "이미지",
   pdf: "PDF",
+  office: "PPT/워드/엑셀",
   link: "링크/영상",
 };
+
+// Office files the viewer can render inline.
+const OFFICE_ACCEPT =
+  ".ppt,.pptx,.doc,.docx,.xls,.xlsx," +
+  "application/vnd.ms-powerpoint," +
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+  "application/msword," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.ms-excel," +
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const AI_TIERS: AiModelTier[] = ["fast", "smart"];
 const AI_TIER_LABEL: Record<AiModelTier, string> = {
@@ -588,14 +605,17 @@ export function AppBuilder() {
                     ) : (
                       <div className="flex flex-col gap-1">
                         {(d.contentType === "image" ||
-                          d.contentType === "pdf") && (
+                          d.contentType === "pdf" ||
+                          d.contentType === "office") && (
                           <div className="flex items-center gap-2">
                             <input
                               type="file"
                               accept={
                                 d.contentType === "image"
                                   ? "image/*"
-                                  : "application/pdf"
+                                  : d.contentType === "pdf"
+                                    ? "application/pdf"
+                                    : OFFICE_ACCEPT
                               }
                               onChange={(e) =>
                                 void onContentFile(d.key, e.target.files?.[0])
@@ -617,14 +637,24 @@ export function AppBuilder() {
                               ? "이미지 URL (또는 위에서 파일 업로드)"
                               : d.contentType === "pdf"
                                 ? "PDF URL (또는 위에서 파일 업로드)"
-                                : "링크/유튜브 URL (https://...)"
+                                : d.contentType === "office"
+                                  ? "PPT/워드/엑셀 URL (또는 위에서 파일 업로드)"
+                                  : "링크/유튜브/구글 슬라이드 URL (https://...)"
                           }
                           className={inputClass}
                         />
                         {d.contentType === "link" && (
                           <span className="text-xs text-muted">
-                            유튜브 링크는 학생 화면에서 바로 재생돼요. AI 문항 생성 시
-                            자막을 자동 분석합니다(자막 없으면 스크립트를 텍스트 자료로 붙여넣기).
+                            유튜브·구글 슬라이드/문서 링크는 학생 화면에서 바로 펼쳐져요.
+                            AI 문항 생성 시 유튜브 자막을 자동 분석합니다(자막 없으면
+                            스크립트를 텍스트 자료로 붙여넣기).
+                          </span>
+                        )}
+                        {d.contentType === "office" && (
+                          <span className="text-xs text-muted">
+                            PPT·워드·엑셀 파일을 학생 화면에 그대로 펼쳐 보여줘요.
+                            (Microsoft 문서 뷰어를 거쳐 표시되므로 수업 자료용으로만
+                            쓰고, 대외비 문서는 올리지 마세요.)
                           </span>
                         )}
                         {d.contentType === "image" && d.value && (

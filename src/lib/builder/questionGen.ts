@@ -212,6 +212,13 @@ async function buildContent(
       } else {
         content.push({ type: "text", text: `${caption} (이미지 자료 — 열 수 없어 이 이미지 문항은 만들지 마세요)` });
       }
+    } else if (m.contentType === "office") {
+      // PPT/워드/엑셀은 학생 화면에 뷰어로 펼쳐 보여주기만 하고, 본문은 읽지
+      // 못한다(모델이 직접 지원하지 않는 형식). 근거 없는 출제를 막는다.
+      content.push({
+        type: "text",
+        text: `${caption} (PPT/워드/엑셀 자료 — 내용을 읽지 못했습니다. 이 자료에 대한 문항은 만들지 마세요. 필요하면 교사가 본문을 '텍스트' 자료로 붙여넣어야 합니다.)`,
+      });
     } else if (m.contentType === "pdf") {
       const fetched = await fetchAsBase64(m.value);
       if (fetched) {

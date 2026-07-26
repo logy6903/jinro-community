@@ -141,7 +141,13 @@ function sanitizeField(raw: unknown): FieldConfig | null {
   return field;
 }
 
-const CONTENT_TYPES: readonly ContentType[] = ["text", "image", "pdf", "link"];
+const CONTENT_TYPES: readonly ContentType[] = [
+  "text",
+  "image",
+  "pdf",
+  "link",
+  "office",
+];
 const CONTENT_VALUE_MAX = 5000;
 
 /** Validate + normalize a presentation content block. Null when empty. */

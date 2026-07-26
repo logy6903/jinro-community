@@ -26,13 +26,13 @@ export interface FieldConfig {
  * Presentation content the teacher SHOWS the student (not an input). Turns the
  * app from a submission box into an activity: 자료 제시 → 활동.
  */
-export type ContentType = "text" | "image" | "pdf" | "link";
+export type ContentType = "text" | "image" | "pdf" | "link" | "office";
 
 export interface ContentBlock {
   id: string;
   kind: "content";
   contentType: ContentType;
-  /** text: the body; image/link: the URL. */
+  /** text: the body; image/pdf/office/link: the URL. */
   value: string;
   /** Optional caption/heading. */
   label?: string;
