@@ -304,13 +304,25 @@ export function AppBuilder() {
           | { kind: "content"; label?: string; text: string }
           | { kind: "field"; type: FieldType; label: string; options?: string[] }
         )[];
+        linkNotes?: { label: string; status: string }[];
       };
       if (data.items.length === 0) {
-        const hasLink = chosen.some((d) => d.contentType === "link");
+        // 실패 원인을 정직하게 구분한다. 예전에는 서버가 유튜브에 차단당한
+        // 경우까지 "자막 있는 영상인지 확인하세요"라고 안내해, 멀쩡히 자막이
+        // 있는 영상을 올린 교사가 헛다리를 짚게 만들었다.
+        const bad = (data.linkNotes ?? []).filter((n) => n.status !== "ok");
+        const worst =
+          bad.find((n) => n.status === "unavailable") ??
+          bad.find((n) => n.status === "no_captions") ??
+          bad[0];
         setGenError(
-          hasLink
-            ? "영상 자막을 읽지 못했어요. 자막 있는 영상인지 확인하거나, '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
-            : "문항을 만들지 못했어요. 자료 내용을 확인해 주세요.",
+          worst?.status === "unavailable"
+            ? "지금 영상 대본을 가져오지 못했어요 (영상 문제가 아니라 서버 쪽 일시적 제약입니다). 잠시 후 다시 시도하거나, 유튜브의 '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
+            : worst?.status === "no_captions"
+              ? "이 영상에는 자막이 없어 내용을 읽지 못했어요. '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
+              : worst?.status === "not_youtube"
+                ? "유튜브 영상이 아니라 내용을 읽지 못했어요. 내용을 '텍스트' 자료로 붙여넣어 주세요."
+                : "문항을 만들지 못했어요. 자료 내용을 확인해 주세요.",
         );
         return;
       }

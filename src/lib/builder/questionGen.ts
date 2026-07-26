@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "./anthropic";
+import { getYouTubeTranscript } from "./transcript";
 import type { AiModelTier, ContentType, FieldType } from "./types";
 
 // Draft-stage AI: read the materials a teacher put on an app (제시 자료) and
@@ -10,12 +11,10 @@ import type { AiModelTier, ContentType, FieldType } from "./types";
 // by default, Opus opt-in. Images and PDFs are fetched server-side and sent as
 // vision/document blocks so Claude reads the actual worksheet, not a caption.
 //
-// NOTE on video/links: the public watch page's caption baseUrls now return
-// empty (proof-of-origin token required), but the innertube ANDROID client's
-// caption baseUrls still serve timedtext — that's how we read a YouTube video
-// here. Videos without captions (or non-YouTube links) can't be read; strict
-// grounding then forbids inventing questions about them, and the UI tells the
-// teacher to paste the 스크립트 as a TEXT material instead.
+// NOTE on video/links: 자막 획득은 `./transcript`가 담당한다(무료 innertube →
+// 유료 폴백). 대본을 못 읽은 영상은 strict grounding에 따라 문항을 만들지
+// 않으며, 왜 못 읽었는지(`linkNotes`)를 호출자에게 돌려줘 교사에게 정확한
+// 안내를 띄우게 한다 — "자막 없는 영상"과 "서버가 차단됨"은 다른 상황이다.
 
 const MODEL_ID: Record<AiModelTier, string> = {
   fast: "claude-haiku-4-5",
@@ -71,95 +70,10 @@ async function fetchAsBase64(
   }
 }
 
-// Public innertube ANDROID client key — not a secret (it's YouTube's own public
-// client key). Used to reach caption tracks the watch page no longer serves.
-const YT_ANDROID_KEY = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w";
-
-function youTubeId(url: string): string | null {
-  const patterns = [
-    /youtube\.com\/watch\?[^#]*\bv=([\w-]{11})/,
-    /youtu\.be\/([\w-]{11})/,
-    /youtube\.com\/(?:embed|shorts|live)\/([\w-]{11})/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
-}
-
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
-}
-
-// timedtext XML → plain text (strips <text>/<p> wrappers and inner <s> segments).
-function timedTextToString(xml: string): string {
-  const parts = [
-    ...xml.matchAll(/<(?:text|p)\b[^>]*>([\s\S]*?)<\/(?:text|p)>/g),
-  ].map((m) => m[1].replace(/<[^>]+>/g, ""));
-  return decodeEntities(parts.join(" ")).replace(/\s+/g, " ").trim();
-}
-
-// Best-effort YouTube transcript via the innertube ANDROID client. Returns ""
-// transcript when the video has no captions; null when it's not a YouTube URL
-// or the call fails (from a blocked cloud IP, etc.).
-async function fetchYouTube(
-  url: string,
-): Promise<{ title: string; transcript: string } | null> {
-  const id = youTubeId(url);
-  if (!id) return null;
-  try {
-    const res = await fetch(
-      `https://www.youtube.com/youtubei/v1/player?key=${YT_ANDROID_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent":
-            "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
-        },
-        body: JSON.stringify({
-          context: {
-            client: {
-              clientName: "ANDROID",
-              clientVersion: "20.10.38",
-              androidSdkVersion: 34,
-              hl: "ko",
-              gl: "KR",
-            },
-          },
-          videoId: id,
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const j = (await res.json()) as {
-      videoDetails?: { title?: string };
-      captions?: {
-        playerCaptionsTracklistRenderer?: {
-          captionTracks?: Array<{ baseUrl?: string; languageCode?: string }>;
-        };
-      };
-    };
-    const title = j.videoDetails?.title ?? "";
-    const tracks =
-      j.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
-    if (tracks.length === 0) return { title, transcript: "" };
-    const track = tracks.find((t) => t.languageCode === "ko") ?? tracks[0];
-    if (!track?.baseUrl) return { title, transcript: "" };
-    const capRes = await fetch(track.baseUrl);
-    if (!capRes.ok) return { title, transcript: "" };
-    const transcript = timedTextToString(await capRes.text()).slice(0, 8000);
-    return { title, transcript };
-  } catch {
-    return null;
-  }
+/** Why a link material could not be turned into questions. */
+export interface LinkNote {
+  label: string;
+  status: "ok" | "no_captions" | "unavailable" | "not_youtube";
 }
 
 // Build the multimodal user content: an intro, each material as the right block,
@@ -167,6 +81,10 @@ async function fetchYouTube(
 async function buildContent(
   materials: SourceMaterial[],
   opts: GenerateOptions,
+  linkNotes: LinkNote[],
+  /** Incremented per material we actually managed to read. Out-param so the
+   *  caller can refuse to ship questions with nothing behind them. */
+  readable: { count: number },
 ): Promise<Anthropic.ContentBlockParam[]> {
   const content: Anthropic.ContentBlockParam[] = [
     {
@@ -178,28 +96,35 @@ async function buildContent(
   for (const m of materials) {
     const caption = m.label?.trim() ? `[자료: ${m.label.trim()}]` : "[자료]";
     if (m.contentType === "text") {
+      readable.count += 1;
       content.push({ type: "text", text: `${caption}\n${m.value}` });
     } else if (m.contentType === "link") {
-      const yt = await fetchYouTube(m.value);
-      if (yt && yt.transcript) {
+      const t = await getYouTubeTranscript(m.value);
+      const noteLabel = m.label?.trim() || m.value;
+      if (t.status === "ok") {
+        readable.count += 1;
+        linkNotes.push({ label: noteLabel, status: "ok" });
         content.push({
           type: "text",
-          text: `${caption} (유튜브 영상 대본)\n제목: ${yt.title}\n${yt.transcript}`,
-        });
-      } else if (yt) {
-        content.push({
-          type: "text",
-          text: `${caption} (유튜브: ${yt.title || m.value})\n※ 자막이 없어 영상 내용을 읽지 못했습니다. 이 영상 내용에 대한 문항은 만들지 마세요.`,
+          text: `${caption} (유튜브 영상 대본)\n제목: ${t.title}\n${t.text}`,
         });
       } else {
+        linkNotes.push({ label: noteLabel, status: t.status });
+        const why =
+          t.status === "no_captions"
+            ? "자막이 없어"
+            : t.status === "not_youtube"
+              ? "유튜브 영상이 아니어서"
+              : "대본을 가져오지 못해";
         content.push({
           type: "text",
-          text: `${caption} (외부 링크: ${m.value})\n※ 내용을 읽지 못했습니다. 이 링크 내용에 대한 문항은 만들지 마세요.`,
+          text: `${caption} (링크: ${m.value})\n※ ${why} 내용을 읽지 못했습니다. 이 링크 내용에 대한 문항은 만들지 마세요.`,
         });
       }
     } else if (m.contentType === "image") {
       const fetched = await fetchAsBase64(m.value);
       if (fetched && (IMAGE_TYPES as readonly string[]).includes(fetched.mediaType)) {
+        readable.count += 1;
         content.push({ type: "text", text: caption });
         content.push({
           type: "image",
@@ -222,6 +147,7 @@ async function buildContent(
     } else if (m.contentType === "pdf") {
       const fetched = await fetchAsBase64(m.value);
       if (fetched) {
+        readable.count += 1;
         content.push({ type: "text", text: caption });
         content.push({
           type: "document",
@@ -313,15 +239,28 @@ function parseItems(raw: string, choiceCount: number): GeneratedItem[] {
   return out;
 }
 
+export interface GenerateResult {
+  items: GeneratedItem[];
+  /** Per-link diagnosis, so the UI can explain an empty result truthfully. */
+  linkNotes: LinkNote[];
+}
+
 export async function generateItems(
   materials: SourceMaterial[],
   opts: GenerateOptions,
-): Promise<GeneratedItem[] | null> {
+): Promise<GenerateResult | null> {
   const client = getAnthropicClient();
   if (!client) return null;
-  if (materials.length === 0) return [];
+  if (materials.length === 0) return { items: [], linkNotes: [] };
 
-  const content = await buildContent(materials, opts);
+  const linkNotes: LinkNote[] = [];
+  const readable = { count: 0 };
+  const content = await buildContent(materials, opts, linkNotes, readable);
+  // 읽어낸 자료가 하나도 없으면 모델을 호출하지 않는다. 근거가 전혀 없는데도
+  // 모델이 그럴듯한 문항을 지어내는 일이 실제로 관측됐다(자막 없는 영상 1건에
+  // 문항 1개 생성). "근거 없으면 출제하지 않는다"는 프롬프트 지시에만 맡기지
+  // 않고 코드로 막는다.
+  if (readable.count === 0) return { items: [], linkNotes };
   try {
     const res = await client.messages.create({
       model: MODEL_ID[opts.tier] ?? MODEL_ID.fast,
@@ -333,7 +272,7 @@ export async function generateItems(
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
-    return parseItems(text, opts.choiceCount);
+    return { items: parseItems(text, opts.choiceCount), linkNotes };
   } catch {
     return null;
   }

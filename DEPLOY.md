@@ -36,6 +36,10 @@ git push origin master              # → Vercel이 자동 배포
    *(현재 추가돼 있음)*
 3. **환경변수**(Firebase Admin 3개 + `ANTHROPIC_API_KEY` 포함 11개)는
    최초 1회 설정 완료 — 평소엔 손댈 필요 없음.
+   - ⚠️ `SUPADATA_API_KEY`는 **Vercel에 반드시 넣어야** 합니다. 유튜브가
+     데이터센터 IP의 자막 요청을 차단하므로, 이 키가 없으면 **로컬에서는
+     되는데 배포본에서만** 영상 문항 생성이 0개가 됩니다(2026-07-27 실측).
+     로컬은 가정 IP라 무료 경로로 동작해서 이 문제가 안 보입니다.
    - 로컬은 루트 `service-account.json`(gitignore)로 admin 인증하지만
      Vercel엔 파일을 못 올리므로 그 JSON의 값을
      `FIREBASE_ADMIN_PROJECT_ID` / `FIREBASE_ADMIN_CLIENT_EMAIL` /

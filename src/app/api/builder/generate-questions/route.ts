@@ -13,10 +13,20 @@ import type { AiModelTier, ContentType } from "@/lib/builder/types";
 // items — content blocks the AI generated + question fields — that the teacher
 // edits. Teacher + profile gated; ≈free (1 call/app).
 
+// 자막이 유료 폴백의 비동기 잡으로 넘어가면 최대 90초까지 기다린다(20분 넘는
+// 영상). 그 뒤 Claude 호출까지 있으므로 기본 제한으로는 모자란다.
+export const maxDuration = 180;
+
 const MAX_MATERIALS = 8;
 const TEXT_MAX = 12000;
 const INSTRUCTION_MAX = 1000;
-const CONTENT_TYPES: ContentType[] = ["text", "image", "pdf", "link"];
+const CONTENT_TYPES: ContentType[] = [
+  "text",
+  "image",
+  "pdf",
+  "link",
+  "office",
+];
 
 function sanitizeMaterials(raw: unknown): SourceMaterial[] {
   if (!Array.isArray(raw)) return [];
@@ -71,14 +81,14 @@ export async function POST(req: Request) {
       ? body.instruction.slice(0, INSTRUCTION_MAX)
       : undefined;
 
-  const items = await generateItems(materials, {
+  const result = await generateItems(materials, {
     count,
     tier,
     choiceCount,
     instruction,
   });
-  if (items === null) {
+  if (result === null) {
     return Response.json({ error: "ai_unavailable" }, { status: 503 });
   }
-  return Response.json({ items });
+  return Response.json(result);
 }
