@@ -183,6 +183,9 @@ export function AppBuilder() {
   const [genInstruction, setGenInstruction] = useState("");
   const [genBusy, setGenBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  // 자막 없는 영상을 만났을 때만 뜨는 재시도 제안. 교사가 눌러야만 AI
+  // 받아쓰기(영상 1분당 2크레딧)에 들어간다 — 모르는 사이에 소모되면 안 된다.
+  const [aiOffer, setAiOffer] = useState<{ usesLeft: number } | null>(null);
 
   const loadApps = useCallback(async () => {
     if (!user) return;
@@ -259,7 +262,7 @@ export function AppBuilder() {
 
   // Send the selected 제시 자료 to the AI and append the returned questions as
   // editable field drafts. Draft-stage AI — one call per app, teacher-side.
-  async function onGenerateQuestions() {
+  async function onGenerateQuestions(allowAiTranscript = false) {
     if (genBusy || !user) return;
     const chosen = drafts.filter(
       (d) => d.kind === "content" && genSelected.has(d.key) && d.value.trim(),
@@ -270,6 +273,7 @@ export function AppBuilder() {
     }
     setGenBusy(true);
     setGenError(null);
+    setAiOffer(null);
     try {
       const token = await user.getIdToken();
       const materials = chosen.map((d) => ({
@@ -289,6 +293,7 @@ export function AppBuilder() {
           model: genModel,
           choiceCount: genChoiceCount,
           instruction: genInstruction.trim() || undefined,
+          allowAiTranscript,
         }),
       });
       if (res.status === 503) {
@@ -304,7 +309,8 @@ export function AppBuilder() {
           | { kind: "content"; label?: string; text: string }
           | { kind: "field"; type: FieldType; label: string; options?: string[] }
         )[];
-        linkNotes?: { label: string; status: string }[];
+        linkNotes?: { label: string; status: string; minutes?: number }[];
+        aiQuota?: { usesLeft: number; freeUses: number; blocked: boolean };
       };
       if (data.items.length === 0) {
         // 실패 원인을 정직하게 구분한다. 예전에는 서버가 유튜브에 차단당한
@@ -315,17 +321,31 @@ export function AppBuilder() {
           bad.find((n) => n.status === "unavailable") ??
           bad.find((n) => n.status === "no_captions") ??
           bad[0];
+        // 자막이 없을 뿐이라면, AI 받아쓰기를 제안한다(교사가 눌러야 소모).
+        const noCap = bad.find((n) => n.status === "no_captions");
+        if (noCap && !allowAiTranscript && (data.aiQuota?.usesLeft ?? 0) > 0) {
+          setAiOffer({ usesLeft: data.aiQuota!.usesLeft });
+          setGenError(null);
+          return;
+        }
         setGenError(
           worst?.status === "unavailable"
             ? "지금 영상 대본을 가져오지 못했어요 (영상 문제가 아니라 서버 쪽 일시적 제약입니다). 잠시 후 다시 시도하거나, 유튜브의 '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
-            : worst?.status === "no_captions"
-              ? "이 영상에는 자막이 없어 내용을 읽지 못했어요. '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
-              : worst?.status === "not_youtube"
-                ? "유튜브 영상이 아니라 내용을 읽지 못했어요. 내용을 '텍스트' 자료로 붙여넣어 주세요."
-                : "문항을 만들지 못했어요. 자료 내용을 확인해 주세요.",
+            : worst?.status === "too_long"
+              ? `영상이 너무 길어요 (${worst.minutes ?? "?"}분). 받아쓰기는 20분 이하만 됩니다. 더 짧은 영상을 쓰거나 '스크립트'를 텍스트 자료로 붙여넣어 주세요.`
+              : worst?.status === "quota_exceeded"
+                ? "무료 AI 받아쓰기 한도를 다 쓰셨어요. '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
+                : worst?.status === "no_captions"
+                  ? data.aiQuota?.blocked
+                    ? "무료 AI 받아쓰기 한도를 다 쓰셨어요. '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
+                    : "이 영상에는 자막이 없어 내용을 읽지 못했어요. '스크립트'를 복사해 '텍스트' 자료로 붙여넣어 주세요."
+                  : worst?.status === "not_youtube"
+                    ? "유튜브 영상이 아니라 내용을 읽지 못했어요. 내용을 '텍스트' 자료로 붙여넣어 주세요."
+                    : "문항을 만들지 못했어요. 자료 내용을 확인해 주세요.",
         );
         return;
       }
+      if (data.aiQuota) setAiOffer(null);
       // Append in order: AI-generated 보기/지문 as content drafts, questions as
       // field drafts. The teacher can edit or delete any of them.
       setDrafts((ds) => [
@@ -951,6 +971,35 @@ export function AppBuilder() {
                     {genBusy ? "생성 중…" : "🤖 문항 생성"}
                   </button>
                 </div>
+                {aiOffer && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-brand/50 bg-card p-3">
+                    <span className="text-xs font-semibold text-brand">
+                      자막이 없는 영상이에요
+                    </span>
+                    <p className="text-xs text-muted">
+                      AI가 영상의 말소리를 받아쓸 수 있어요. 시간이 조금 걸리고
+                      비용이 들어서, <b>무료 {aiOffer.usesLeft}회</b>가 남았을
+                      때만 쓸 수 있어요. (20분 이하 영상)
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void onGenerateQuestions(true)}
+                        disabled={genBusy}
+                        className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {genBusy ? "받아쓰는 중…" : `🎧 AI로 받아쓰기 (남은 ${aiOffer.usesLeft}회)`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiOffer(null)}
+                        className="rounded-full border border-border px-3 py-1.5 text-xs text-muted hover:border-brand"
+                      >
+                        괜찮아요
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {genError && <p className="text-xs text-red-600">{genError}</p>}
               </div>
             )}

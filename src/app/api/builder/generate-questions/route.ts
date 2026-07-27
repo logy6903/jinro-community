@@ -4,6 +4,13 @@ import {
   generateItems,
   type SourceMaterial,
 } from "@/lib/builder/questionGen";
+import {
+  FREE_AI_CREDITS,
+  FREE_AI_USES,
+  MAX_AI_MINUTES,
+  getAiQuota,
+  recordAiTranscript,
+} from "@/lib/builder/aiQuota";
 import type { AiModelTier, ContentType } from "@/lib/builder/types";
 
 // POST /api/builder/generate-questions — draft-stage AI.
@@ -58,6 +65,7 @@ export async function POST(req: Request) {
     model?: unknown;
     choiceCount?: unknown;
     instruction?: unknown;
+    allowAiTranscript?: unknown;
   } | null;
 
   const materials = sanitizeMaterials(body?.materials);
@@ -81,14 +89,48 @@ export async function POST(req: Request) {
       ? body.instruction.slice(0, INSTRUCTION_MAX)
       : undefined;
 
+  // 자막 없는 영상의 AI 받아쓰기는 교사가 명시적으로 요청했을 때만.
+  // 비용이 영상 길이에 비례하므로(1분당 2 크레딧) 무료 할당량을 확인한다.
+  const wantsAi = body?.allowAiTranscript === true;
+  const quota = await getAiQuota(user.uid);
+  const allowAi = wantsAi && quota.allowed;
+
   const result = await generateItems(materials, {
     count,
     tier,
     choiceCount,
     instruction,
+    transcript: allowAi
+      ? {
+          allowAi: true,
+          aiCreditsLeft: Math.max(0, FREE_AI_CREDITS - quota.credits),
+          maxAiMinutes: MAX_AI_MINUTES,
+        }
+      : { allowAi: false },
   });
   if (result === null) {
     return Response.json({ error: "ai_unavailable" }, { status: 503 });
   }
-  return Response.json(result);
+
+  // 실제로 받아쓴 영상 수만큼 차감한다. 크레딧은 자막 조회분까지 포함해
+  // 누적하되, 받아쓰기를 한 번도 안 했으면 횟수는 건드리지 않는다.
+  if (result.aiTranscripts > 0) {
+    for (let i = 0; i < result.aiTranscripts; i++) {
+      await recordAiTranscript(
+        user.uid,
+        Math.ceil(result.credits / result.aiTranscripts),
+      );
+    }
+  }
+
+  const after = await getAiQuota(user.uid);
+  return Response.json({
+    ...result,
+    aiQuota: {
+      usesLeft: after.usesLeft,
+      freeUses: FREE_AI_USES,
+      // 요청했는데 막힌 경우를 클라이언트가 구분할 수 있게.
+      blocked: wantsAi && !quota.allowed,
+    },
+  });
 }

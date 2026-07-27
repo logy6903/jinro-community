@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "./anthropic";
-import { getYouTubeTranscript } from "./transcript";
+import { getYouTubeTranscript, type TranscriptOptions } from "./transcript";
 import type { AiModelTier, ContentType, FieldType } from "./types";
 
 // Draft-stage AI: read the materials a teacher put on an app (제시 자료) and
@@ -53,6 +53,8 @@ export interface GenerateOptions {
   choiceCount: number;
   /** Extra teacher instruction beyond the source material (optional). */
   instruction?: string;
+  /** 자막 획득 정책(AI 받아쓰기 허용 여부·남은 크레딧·길이 상한). */
+  transcript?: TranscriptOptions;
 }
 
 async function fetchAsBase64(
@@ -73,7 +75,19 @@ async function fetchAsBase64(
 /** Why a link material could not be turned into questions. */
 export interface LinkNote {
   label: string;
-  status: "ok" | "no_captions" | "unavailable" | "not_youtube";
+  status:
+    | "ok"
+    | "no_captions"
+    | "unavailable"
+    | "not_youtube"
+    | "too_long"
+    | "quota_exceeded";
+  /** too_long / quota_exceeded 일 때 영상 길이(분). */
+  minutes?: number;
+  /** quota_exceeded 일 때 필요한 크레딧. */
+  needed?: number;
+  /** 이 영상을 AI가 받아썼는가(무료 횟수를 소모했는가). */
+  aiUsed?: boolean;
 }
 
 // Build the multimodal user content: an intro, each material as the right block,
@@ -85,6 +99,8 @@ async function buildContent(
   /** Incremented per material we actually managed to read. Out-param so the
    *  caller can refuse to ship questions with nothing behind them. */
   readable: { count: number },
+  /** 이번 호출에서 실제로 쓴 Supadata 크레딧과 AI 받아쓰기 횟수. */
+  spend: { credits: number; aiTranscripts: number },
 ): Promise<Anthropic.ContentBlockParam[]> {
   const content: Anthropic.ContentBlockParam[] = [
     {
@@ -99,23 +115,35 @@ async function buildContent(
       readable.count += 1;
       content.push({ type: "text", text: `${caption}\n${m.value}` });
     } else if (m.contentType === "link") {
-      const t = await getYouTubeTranscript(m.value);
+      const t = await getYouTubeTranscript(m.value, opts.transcript);
       const noteLabel = m.label?.trim() || m.value;
+      spend.credits += t.credits;
       if (t.status === "ok") {
         readable.count += 1;
-        linkNotes.push({ label: noteLabel, status: "ok" });
+        const aiUsed = t.source === "supadata_ai";
+        if (aiUsed) spend.aiTranscripts += 1;
+        linkNotes.push({ label: noteLabel, status: "ok", aiUsed });
         content.push({
           type: "text",
           text: `${caption} (유튜브 영상 대본)\n제목: ${t.title}\n${t.text}`,
         });
       } else {
-        linkNotes.push({ label: noteLabel, status: t.status });
+        linkNotes.push({
+          label: noteLabel,
+          status: t.status,
+          minutes: "minutes" in t ? t.minutes : undefined,
+          needed: "needed" in t ? t.needed : undefined,
+        });
         const why =
           t.status === "no_captions"
             ? "자막이 없어"
             : t.status === "not_youtube"
               ? "유튜브 영상이 아니어서"
-              : "대본을 가져오지 못해";
+              : t.status === "too_long"
+                ? "영상이 너무 길어"
+                : t.status === "quota_exceeded"
+                  ? "받아쓰기 한도를 넘어"
+                  : "대본을 가져오지 못해";
         content.push({
           type: "text",
           text: `${caption} (링크: ${m.value})\n※ ${why} 내용을 읽지 못했습니다. 이 링크 내용에 대한 문항은 만들지 마세요.`,
@@ -243,6 +271,10 @@ export interface GenerateResult {
   items: GeneratedItem[];
   /** Per-link diagnosis, so the UI can explain an empty result truthfully. */
   linkNotes: LinkNote[];
+  /** 이번 호출에서 실제로 소모한 Supadata 크레딧. */
+  credits: number;
+  /** 그중 AI 받아쓰기를 쓴 영상 수(교사 무료 횟수 차감 대상). */
+  aiTranscripts: number;
 }
 
 export async function generateItems(
@@ -251,16 +283,21 @@ export async function generateItems(
 ): Promise<GenerateResult | null> {
   const client = getAnthropicClient();
   if (!client) return null;
-  if (materials.length === 0) return { items: [], linkNotes: [] };
+  const spend = { credits: 0, aiTranscripts: 0 };
+  if (materials.length === 0) {
+    return { items: [], linkNotes: [], credits: 0, aiTranscripts: 0 };
+  }
 
   const linkNotes: LinkNote[] = [];
   const readable = { count: 0 };
-  const content = await buildContent(materials, opts, linkNotes, readable);
+  const content = await buildContent(materials, opts, linkNotes, readable, spend);
   // 읽어낸 자료가 하나도 없으면 모델을 호출하지 않는다. 근거가 전혀 없는데도
   // 모델이 그럴듯한 문항을 지어내는 일이 실제로 관측됐다(자막 없는 영상 1건에
   // 문항 1개 생성). "근거 없으면 출제하지 않는다"는 프롬프트 지시에만 맡기지
   // 않고 코드로 막는다.
-  if (readable.count === 0) return { items: [], linkNotes };
+  if (readable.count === 0) {
+    return { items: [], linkNotes, credits: spend.credits, aiTranscripts: spend.aiTranscripts };
+  }
   try {
     const res = await client.messages.create({
       model: MODEL_ID[opts.tier] ?? MODEL_ID.fast,
@@ -272,8 +309,15 @@ export async function generateItems(
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
-    return { items: parseItems(text, opts.choiceCount), linkNotes };
+    return {
+      items: parseItems(text, opts.choiceCount),
+      linkNotes,
+      credits: spend.credits,
+      aiTranscripts: spend.aiTranscripts,
+    };
   } catch {
-    return null;
+    // 대본은 이미 돈을 썼다. 모델 호출만 실패한 경우에도 소모량은 보고해야
+    // 무료 횟수 회계가 어긋나지 않는다.
+    return { items: [], linkNotes, credits: spend.credits, aiTranscripts: spend.aiTranscripts };
   }
 }
