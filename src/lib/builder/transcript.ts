@@ -137,7 +137,18 @@ async function viaSupadata(url: string): Promise<TranscriptOutcome | null> {
 
   const headers = { "x-api-key": key };
   try {
-    const qs = new URLSearchParams({ url, lang: "ko", text: "true" });
+    // mode=native: 이미 있는 자막만 가져온다(요청 1건 = 1 크레딧).
+    // 기본값 auto는 자막이 없으면 AI 음성인식으로 넘어가는데, 그건
+    // "영상 1분당 2 크레딧"이다. 12분짜리 자막 없는 영상 한 번이면 24
+    // 크레딧 — 무료 100건의 1/4이 버튼 한 번에 날아간다. 자막이 없을
+    // 때는 교사에게 대본 붙여넣기를 안내하는 흐름이 이미 있으므로,
+    // 비용이 예측 가능한 native로 고정한다.
+    const qs = new URLSearchParams({
+      url,
+      lang: "ko",
+      text: "true",
+      mode: "native",
+    });
     let res = await fetch(`${SUPADATA_ENDPOINT}?${qs}`, { headers });
     let body = (await res.json().catch(() => ({}))) as SupadataBody;
 
