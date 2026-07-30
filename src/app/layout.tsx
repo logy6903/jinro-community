@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AdminMenu } from "@/components/AdminMenu";
 import { AuthButton } from "@/components/AuthButton";
 import { HeaderNav } from "@/components/HeaderNav";
 import { HeaderQr } from "@/components/HeaderQr";
@@ -31,6 +32,7 @@ export default function RootLayout({
               </Link>
               <HeaderNav />
               <div className="flex shrink-0 items-center gap-3">
+                <AdminMenu />
                 <HeaderQr />
                 <AuthButton />
               </div>

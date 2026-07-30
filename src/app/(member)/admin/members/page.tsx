@@ -6,14 +6,31 @@ import type { TeacherProfile } from "@/lib/members/types";
 
 // 관리자 회원 관리. ADMIN_EMAILS에 등록된 이메일만 접근(서버에서 검증).
 // 사전 승인은 없음 — 가입은 즉시 완료되고, 문제 계정을 여기서 삭제한다.
+// 가입 정보를 한 화면에서 다 보여주는 창구: 이름·학교급·학교·지역·이메일·
+// 인증된 휴대폰·가입일 + 검색 + 엑셀 내보내기.
 
 const LEVEL_LABEL: Record<string, string> = { middle: "중", high: "고" };
+
+/** +821012345678 → 010-1234-5678 (국내 번호만 예쁘게, 그 외는 원문). */
+function formatPhone(p: string): string {
+  if (!p) return "";
+  const kr = p.replace(/^\+82/, "0").replace(/[^0-9]/g, "");
+  if (kr.length === 11) return `${kr.slice(0, 3)}-${kr.slice(3, 7)}-${kr.slice(7)}`;
+  if (kr.length === 10) return `${kr.slice(0, 3)}-${kr.slice(3, 6)}-${kr.slice(6)}`;
+  return p;
+}
+
+/** ISO → YYYY.MM.DD (없으면 빈칸). */
+function formatDate(iso?: string): string {
+  return iso ? iso.slice(0, 10).replace(/-/g, ".") : "";
+}
 
 export default function AdminMembersPage() {
   const { user } = useAuth();
   const [teachers, setTeachers] = useState<TeacherProfile[] | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -56,6 +73,36 @@ export default function AdminMembersPage() {
     }
   }
 
+  /** 이름·학교·지역·이메일·휴대폰 어디든 걸리는 단순 검색. */
+  const shown = (teachers ?? []).filter((t) => {
+    const k = q.trim().toLowerCase();
+    if (!k) return true;
+    return [t.name, t.schoolName, t.region, t.email, t.phone, formatPhone(t.phone)]
+      .join(" ")
+      .toLowerCase()
+      .includes(k);
+  });
+
+  async function exportExcel() {
+    // 클릭 시에만 로드(번들 절약).
+    const XLSX = await import("xlsx");
+    const aoa = [
+      ["이름", "학교급", "학교명", "지역", "이메일", "휴대폰(인증됨)", "가입일"],
+      ...shown.map((t) => [
+        t.name,
+        t.schoolLevel === "high" ? "고등학교" : "중학교",
+        t.schoolName,
+        t.region,
+        t.email,
+        formatPhone(t.phone),
+        formatDate(t.createdAt),
+      ]),
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "회원");
+    XLSX.writeFile(wb, "진로교사커뮤니티_회원목록.xlsx");
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
@@ -77,29 +124,70 @@ export default function AdminMembersPage() {
         </div>
       ) : (
         <>
-          <p className="text-xs text-muted">총 {teachers.length}명</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="이름·학교·지역·이메일·번호 검색"
+              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand"
+            />
+            <button
+              type="button"
+              onClick={() => void exportExcel()}
+              className="rounded-full border border-brand/40 px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft"
+            >
+              엑셀 내보내기
+            </button>
+          </div>
+
+          <p className="text-xs text-muted">
+            총 {teachers.length}명
+            {q.trim() && ` · 검색 결과 ${shown.length}명`}
+          </p>
+
           <div className="flex flex-col gap-2">
-            {teachers.map((t) => (
+            {shown.map((t) => (
               <div
                 key={t.uid}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-border bg-card px-4 py-3"
+                className="flex flex-col gap-1.5 rounded-2xl border border-border bg-card px-4 py-3"
               >
-                <span className="font-semibold">{t.name || "(이름 없음)"}</span>
-                <span className="text-sm text-muted">
-                  {LEVEL_LABEL[t.schoolLevel] ?? ""} · {t.schoolName}
-                  {t.region ? ` · ${t.region}` : ""}
-                </span>
-                <span className="text-xs text-muted">{t.email}</span>
-                <button
-                  type="button"
-                  onClick={() => void remove(t)}
-                  disabled={busy === t.uid}
-                  className="ml-auto rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-red-400 hover:text-red-600 disabled:opacity-50"
-                >
-                  {busy === t.uid ? "삭제 중…" : "삭제"}
-                </button>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-semibold">{t.name || "(이름 없음)"}</span>
+                  <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">
+                    {LEVEL_LABEL[t.schoolLevel] ?? ""}
+                  </span>
+                  <span className="text-sm text-muted">
+                    {t.schoolName}
+                    {t.region ? ` · ${t.region}` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void remove(t)}
+                    disabled={busy === t.uid}
+                    className="ml-auto shrink-0 rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {busy === t.uid ? "삭제 중…" : "삭제"}
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                  <span>✉ {t.email}</span>
+                  {t.phone ? (
+                    <span className="font-medium text-foreground/80">
+                      📱 {formatPhone(t.phone)}
+                      <span className="ml-1 text-[10px] text-brand">인증됨</span>
+                    </span>
+                  ) : (
+                    <span className="text-muted/60">📱 번호 없음</span>
+                  )}
+                  {t.createdAt && <span>가입 {formatDate(t.createdAt)}</span>}
+                </div>
               </div>
             ))}
+            {shown.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted">
+                검색 결과가 없습니다.
+              </div>
+            )}
           </div>
         </>
       )}
