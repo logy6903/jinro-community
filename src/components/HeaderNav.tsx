@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 // 헤더 내비. 콘텐츠 축으로 재편 — "받기(열람)"와 "올리기(기여)"를 두 문으로 분리:
-//  - 직접 링크: 챗봇 · 일정표 (매일 꺼내 쓰는 것)
+//  - 직접 링크: 챗봇(수리중, 비활성) · 일정표 (매일 꺼내 쓰는 것)
 //  - 자료실 ▾ (받기, 비회원도 열람): 수업 자료(/board) · 진학 자료(/info)
 //  - 공유 작업실 ▾ (올리기, 로그인): 대입[요강·내신·기타공유] / 고입[요강(준비중)]
 //    / 수업[자료공유] + 정보 검토·보정. 소제목으로 구역을 나눔.
@@ -110,12 +110,16 @@ function Dropdown({
 export function HeaderNav() {
   return (
     <nav className="flex flex-1 flex-wrap items-center justify-center gap-x-8 gap-y-1">
-      <Link
-        href="/chat"
-        className="text-sm font-medium text-brand hover:opacity-80"
+      <span
+        className="inline-flex cursor-not-allowed items-center gap-1.5 text-sm text-muted/60"
+        title="챗봇 점검 중 — 곧 다시 열립니다"
+        aria-disabled="true"
       >
         챗봇
-      </Link>
+        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+          수리중
+        </span>
+      </span>
       <Link href="/schedule" className="text-sm text-muted hover:text-foreground">
         일정표
       </Link>

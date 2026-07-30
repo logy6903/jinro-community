@@ -16,6 +16,9 @@ const EXAMPLES = [
   "학교장추천 모집단위",
 ];
 
+// 수리중 스위치. 데이터 정비가 끝나면 false로 바꾸면 검색이 그대로 돌아온다.
+const UNDER_MAINTENANCE: boolean = true;
+
 export default function ChatPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -56,11 +59,25 @@ export default function ChatPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-bold">자료 검색</h1>
         <p className="text-sm text-muted">
-          교사들이 올린 데이터에서만 찾아 <b>그대로</b> 보여줍니다. 없는 내용은
-          지어내지 않아요(AI 생성 아님). 답마다 출처를 밝힙니다.
+          {UNDER_MAINTENANCE
+            ? "지금 점검 중입니다. 곧 다시 열겠습니다."
+            : "교사들이 올린 데이터에서만 찾아 그대로 보여줍니다. 없는 내용은 지어내지 않아요(AI 생성 아님). 답마다 출처를 밝힙니다."}
         </p>
       </div>
 
+      {UNDER_MAINTENANCE ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
+          <span className="text-3xl" aria-hidden>
+            🛠️
+          </span>
+          <p className="text-base font-semibold">자료 검색 수리 중</p>
+          <p className="max-w-md text-sm leading-relaxed text-muted">
+            더 정확한 검색을 위해 정비하고 있어요. 그동안 자료는 <b>자료실</b>에서
+            바로 찾아보실 수 있습니다.
+          </p>
+        </div>
+      ) : (
+        <>
       {turns.length === 0 ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted">이렇게 검색해보세요</p>
@@ -119,6 +136,8 @@ export default function ChatPage() {
           검색
         </button>
       </form>
+        </>
+      )}
     </div>
   );
 }
