@@ -22,6 +22,22 @@ function str(v: unknown, max: number): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 }
 
+/**
+ * 관리자가 입력한 번호를 저장 형식(E.164, +8210…)으로 정규화.
+ * 010-1234-5678 / 01012345678 / +821012345678 모두 받는다.
+ * 빈 문자열이면 "" (번호 지움), 형식이 이상하면 null(거절).
+ */
+export function normalizePhone(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return "";
+  const digits = t.replace(/[^0-9]/g, "");
+  // 82로 시작하면 국가번호가 붙은 것, 0으로 시작하면 국내 표기.
+  const local = digits.startsWith("82") ? "0" + digits.slice(2) : digits;
+  if (!/^0\d{9,10}$/.test(local)) return null;
+  return "+82" + local.slice(1);
+}
+
 /** 가입 폼 값 검증·정규화. 필수값 누락이면 null. */
 export function sanitizeProfileInput(raw: unknown): TeacherProfileInput | null {
   if (!raw || typeof raw !== "object") return null;
@@ -45,6 +61,7 @@ function toProfile(uid: string, d: FirebaseFirestore.DocumentData): TeacherProfi
     schoolLevel: d.schoolLevel === "high" ? "high" : "middle",
     schoolName: d.schoolName ?? "",
     region: d.region ?? "",
+    ...(d.phoneSource === "admin" ? { phoneSource: "admin" as const } : {}),
     ...(createdAt ? { createdAt: createdAt.toDate().toISOString() } : {}),
   };
 }
@@ -81,21 +98,32 @@ export async function upsertTeacherProfile(
 }
 
 /**
- * 관리자에 의한 프로필 수정. 이름·학교급·학교명·지역만 고친다.
- * email(구글 계정)과 phone(SMS 인증값)은 "검증된 사실"이라 여기서 바꾸지 않는다
- * — 관리자가 임의로 번호를 넣을 수 있으면 인증의 의미가 사라진다.
+ * 관리자에 의한 프로필 수정. 이름·학교급·학교명·지역, 그리고 (넘어오면) 전화번호.
+ *
+ * 번호가 바뀐 회원을 고쳐줄 수 있어야 해서 관리자 수정을 허용하되, 본인 SMS
+ * 인증으로 들어온 값과 구분하려고 phoneSource를 "admin"으로 남긴다. 화면에서
+ * "인증됨"이 아니라 "관리자 입력"으로 표시된다.
+ *
+ * email(구글 계정)은 로그인 정체성이라 여전히 바꾸지 않는다.
  * 없는 회원이면 null.
  */
 export async function updateTeacherProfile(
   uid: string,
   input: TeacherProfileInput,
+  phone?: string,
 ): Promise<TeacherProfile | null> {
   const db = getAdminDb();
   if (!db) return null;
   const ref = db.collection(COLLECTION).doc(uid);
   const snap = await ref.get();
   if (!snap.exists) return null;
-  await ref.set({ ...input }, { merge: true });
+
+  const patch: Record<string, unknown> = { ...input };
+  if (phone !== undefined && phone !== (snap.data()?.phone ?? "")) {
+    patch.phone = phone;
+    patch.phoneSource = "admin";
+  }
+  await ref.set(patch, { merge: true });
   return getTeacherProfile(uid);
 }
 

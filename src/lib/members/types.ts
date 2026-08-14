@@ -9,10 +9,18 @@ export interface TeacherProfile {
   /** Google 계정 이메일 (토큰에서). */
   email: string;
   /**
-   * SMS 인증을 마친 전화번호(E.164, 예: +821012345678). 클라이언트 입력이 아니라
-   * 검증된 토큰의 phone_number에서만 채운다 — 오타·위조가 원천적으로 불가능.
+   * 전화번호(E.164, 예: +821012345678).
+   *
+   * 가입 시에는 검증된 토큰의 phone_number로만 채운다(본인 SMS 인증 = 오타·위조
+   * 불가). 다만 번호가 바뀐 회원을 관리자가 고쳐줄 수 있어야 해서, 관리자 수정도
+   * 허용한다. 어느 경로로 들어온 값인지는 phoneSource로 구분한다.
    */
   phone: string;
+  /**
+   * 번호의 출처. "verified" = 본인 SMS 인증(가입 시), "admin" = 관리자가 입력.
+   * 없으면(legacy) 인증된 값으로 취급 — 관리자 수정 기능 이전 데이터라서.
+   */
+  phoneSource?: "verified" | "admin";
   name: string;
   schoolLevel: MemberSchoolLevel;
   schoolName: string;

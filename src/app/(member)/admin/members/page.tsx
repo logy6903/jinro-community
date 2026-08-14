@@ -74,6 +74,7 @@ export default function AdminMembersPage() {
       schoolLevel: "middle" | "high";
       schoolName: string;
       region: string;
+      phone: string;
     },
   ) {
     if (!user || busy) return;
@@ -89,7 +90,12 @@ export default function AdminMembersPage() {
         body: JSON.stringify(input),
       });
       if (!res.ok) {
-        window.alert("저장에 실패했습니다. 이름·학교명은 비울 수 없어요.");
+        const d = (await res.json().catch(() => null)) as { error?: string } | null;
+        window.alert(
+          d?.error === "invalid_phone"
+            ? "휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)"
+            : "저장에 실패했습니다. 이름·학교명은 비울 수 없어요.",
+        );
         return;
       }
       setEditing(null);
@@ -142,7 +148,7 @@ export default function AdminMembersPage() {
     // 클릭 시에만 로드(번들 절약).
     const XLSX = await import("xlsx");
     const aoa = [
-      ["이름", "학교급", "학교명", "지역", "이메일", "휴대폰(인증됨)", "가입일"],
+      ["이름", "학교급", "학교명", "지역", "이메일", "휴대폰", "번호 출처", "가입일"],
       ...shown.map((t) => [
         t.name,
         t.schoolLevel === "high" ? "고등학교" : "중학교",
@@ -150,6 +156,7 @@ export default function AdminMembersPage() {
         t.region,
         t.email,
         formatPhone(t.phone),
+        t.phone ? (t.phoneSource === "admin" ? "관리자 입력" : "본인 인증") : "",
         formatDate(t.createdAt),
       ]),
     ];
@@ -341,7 +348,11 @@ export default function AdminMembersPage() {
                   {t.phone ? (
                     <span className="font-medium text-foreground/80">
                       📱 {formatPhone(t.phone)}
-                      <span className="ml-1 text-[10px] text-brand">인증됨</span>
+                      {t.phoneSource === "admin" ? (
+                        <span className="ml-1 text-[10px] text-muted">관리자 입력</span>
+                      ) : (
+                        <span className="ml-1 text-[10px] text-brand">인증됨</span>
+                      )}
                     </span>
                   ) : (
                     <span className="text-muted/60">📱 번호 없음</span>
@@ -381,6 +392,7 @@ function MemberEditRow({
     schoolLevel: "middle" | "high";
     schoolName: string;
     region: string;
+    phone: string;
   }) => void;
   onCancel: () => void;
 }) {
@@ -388,6 +400,8 @@ function MemberEditRow({
   const [schoolLevel, setSchoolLevel] = useState<"middle" | "high">(teacher.schoolLevel);
   const [schoolName, setSchoolName] = useState(teacher.schoolName);
   const [region, setRegion] = useState(teacher.region);
+  // 보기 편한 국내 표기로 편집하고, 저장 시 서버가 E.164로 정규화한다.
+  const [phone, setPhone] = useState(formatPhone(teacher.phone));
 
   const field =
     "rounded-lg border border-border bg-card px-3 py-1.5 text-sm outline-none focus:border-brand";
@@ -431,11 +445,24 @@ function MemberEditRow({
         </select>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">📱</span>
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="010-1234-5678 (비우면 번호 삭제)"
+          maxLength={20}
+          className={field + " w-52"}
+        />
+        <span className="text-[11px] text-muted">
+          번호를 고치면 <b>관리자 입력</b>으로 표시됩니다(본인 SMS 인증과 구분).
+        </span>
+      </div>
+
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
         <span>✉ {teacher.email}</span>
-        <span>📱 {formatPhone(teacher.phone) || "번호 없음"}</span>
         <span className="text-[11px]">
-          이메일·휴대폰은 본인 인증으로 확인된 값이라 수정할 수 없어요.
+          이메일은 구글 로그인 정체성이라 수정할 수 없어요.
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           <button
@@ -448,7 +475,7 @@ function MemberEditRow({
           </button>
           <button
             type="button"
-            onClick={() => onSave({ name, schoolLevel, schoolName, region })}
+            onClick={() => onSave({ name, schoolLevel, schoolName, region, phone })}
             disabled={busy || !name.trim() || !schoolName.trim()}
             className="rounded-full bg-brand px-4 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
