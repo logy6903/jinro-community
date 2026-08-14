@@ -149,16 +149,26 @@ export function AppDashboard({ appId }: { appId: string }) {
           </div>
 
           {shareUrl && (
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg border border-border bg-white p-2">
-                <QRCodeSVG value={shareUrl} size={96} />
+            // 헤더 우측의 "이 페이지 QR"과 헷갈리지 않도록 이름표를 붙이고
+            // 색으로 구분한다(이건 학생에게 나눠주는 QR).
+            <div className="flex items-center gap-3 rounded-xl border border-brand/40 bg-brand-soft/40 p-3">
+              <div className="flex flex-col items-center gap-1">
+                <div className="rounded-lg border border-border bg-white p-2">
+                  <QRCodeSVG value={shareUrl} size={96} />
+                </div>
+                <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-medium text-white">
+                  학생 배포용
+                </span>
               </div>
               <div className="flex flex-col items-start gap-1">
-                <span className="text-xs text-muted">학생이 폰으로 스캔해 바로 접속</span>
+                <span className="text-sm font-semibold">{app.title}</span>
+                <span className="text-xs text-muted">
+                  학생이 폰으로 스캔하면 이 활동에 바로 접속합니다.
+                </span>
                 <button
                   type="button"
                   onClick={() => setQrBig(true)}
-                  className="rounded-full border border-border px-3 py-1 text-xs hover:border-brand"
+                  className="mt-1 rounded-full border border-border bg-card px-3 py-1 text-xs hover:border-brand"
                 >
                   QR 크게 보기 (교실 화면용)
                 </button>
@@ -177,6 +187,9 @@ export function AppDashboard({ appId }: { appId: string }) {
               role="button"
               tabIndex={0}
             >
+              <span className="rounded-full bg-brand px-3 py-1 text-sm font-medium text-white">
+                학생 배포용 QR
+              </span>
               <h2 className="text-center text-2xl font-bold text-neutral-900">{app.title}</h2>
               <div className="rounded-2xl border border-neutral-200 bg-white p-4">
                 <QRCodeSVG value={shareUrl} size={340} />

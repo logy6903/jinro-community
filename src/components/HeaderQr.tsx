@@ -9,6 +9,28 @@ import { QRCodeSVG } from "qrcode.react";
 // URL도 따라 갱신하고, 열 때 한 번 더 최신화(쿼리 변화 반영). 순수 클라이언트.
 // useSearchParams는 정적 페이지 빌드에서 Suspense 경계를 요구하므로 쓰지 않는다.
 
+/** 경로 → 사람이 알아보는 화면 이름. 확대 화면 제목으로 쓴다. */
+function pageName(path: string): string {
+  const map: Record<string, string> = {
+    "/": "홈",
+    "/chat": "챗봇",
+    "/schedule": "일정표",
+    "/board": "수업 자료",
+    "/datasets": "진학 자료",
+    "/info": "소식·정보",
+    "/pdf": "요강 작업실",
+    "/naeshin": "내신 검수",
+    "/builder": "수업앱",
+    "/signup": "회원 가입",
+  };
+  if (map[path]) return map[path];
+  // 하위 경로는 가장 긴 상위 항목 이름을 따른다 (/board/123 → 수업 자료).
+  const base = Object.keys(map)
+    .filter((k) => k !== "/" && path.startsWith(k))
+    .sort((a, b) => b.length - a.length)[0];
+  return base ? map[base] : "진로교사 커뮤니티";
+}
+
 export function HeaderQr() {
   const pathname = usePathname();
   const [url, setUrl] = useState("");
@@ -41,11 +63,14 @@ export function HeaderQr() {
           refresh();
           setBig(true);
         }}
-        title="이 페이지 QR — 눌러서 크게 보기"
-        aria-label="이 페이지 QR 크게 보기"
-        className="rounded-md border border-border bg-white p-1 leading-none transition-shadow hover:shadow-md"
+        title="이 페이지 주소 QR — 눌러서 크게 보기 (학생 배포용 QR과 다름)"
+        aria-label="이 페이지 주소 QR 크게 보기"
+        className="flex items-center gap-1 rounded-md border border-border bg-white px-1 py-1 leading-none transition-shadow hover:shadow-md"
       >
         <QRCodeSVG value={url} size={26} />
+        <span className="pr-0.5 text-[9px] leading-tight text-neutral-500">
+          이 화면
+        </span>
       </button>
 
       {big && (
@@ -55,8 +80,11 @@ export function HeaderQr() {
           role="button"
           tabIndex={0}
         >
+          <span className="rounded-full border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-600">
+            이 화면 주소 QR
+          </span>
           <h2 className="text-center text-2xl font-bold text-neutral-900">
-            진로교사 커뮤니티
+            {pageName(pathname)}
           </h2>
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
             <QRCodeSVG value={url} size={320} />
