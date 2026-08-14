@@ -1,49 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 
-// 헤더에 다는 "이 페이지 QR". 현재 페이지의 전체 URL을 담아, 미니 QR을 헤더에
-// 보여주고 누르면 전체화면으로 확대(교실 화면·단톡방 공유용). 라우트가 바뀌면
-// URL도 따라 갱신하고, 열 때 한 번 더 최신화(쿼리 변화 반영). 순수 클라이언트.
-// useSearchParams는 정적 페이지 빌드에서 Suspense 경계를 요구하므로 쓰지 않는다.
-
-/** 경로 → 사람이 알아보는 화면 이름. 확대 화면 제목으로 쓴다. */
-function pageName(path: string): string {
-  const map: Record<string, string> = {
-    "/": "홈",
-    "/chat": "챗봇",
-    "/schedule": "일정표",
-    "/board": "수업 자료",
-    "/datasets": "진학 자료",
-    "/info": "소식·정보",
-    "/pdf": "요강 작업실",
-    "/naeshin": "내신 검수",
-    "/builder": "수업앱",
-    "/signup": "회원 가입",
-  };
-  if (map[path]) return map[path];
-  // 하위 경로는 가장 긴 상위 항목 이름을 따른다 (/board/123 → 수업 자료).
-  const base = Object.keys(map)
-    .filter((k) => k !== "/" && path.startsWith(k))
-    .sort((a, b) => b.length - a.length)[0];
-  return base ? map[base] : "진로교사 커뮤니티";
-}
+// 헤더에 다는 커뮤니티 홍보용 QR. 항상 사이트 첫 화면(가입 안내)을 가리키는
+// 고정 QR이다 — 선생님들에게 보여주고 스캔시켜 가입시키는 용도.
+//
+// 예전엔 "현재 페이지 주소"를 담았는데, 회원 전용 페이지가 대부분이라 비회원이
+// 스캔하면 결국 가입 화면으로 튕겼고(=주소만 다르고 결과는 같음) 페이지마다
+// 모양이 바뀌어 혼란스러웠다. 그래서 고정 주소로 바꿨다.
+//
+// 학생에게 나눠주는 QR은 이것과 별개다 — 수업앱 화면 아래쪽의 "학생 배포용 QR".
 
 export function HeaderQr() {
-  const pathname = usePathname();
   const [url, setUrl] = useState("");
   const [big, setBig] = useState(false);
 
-  const refresh = () => {
-    if (typeof window !== "undefined") setUrl(window.location.href);
-  };
-
-  // 라우트 변화에 맞춰 URL 갱신 (SSR 가드).
+  // 사이트 첫 화면 주소로 고정 (페이지를 옮겨다녀도 바뀌지 않는다).
   useEffect(() => {
-    refresh();
-  }, [pathname]);
+    if (typeof window !== "undefined") setUrl(window.location.origin + "/");
+  }, []);
 
   // 확대 중 ESC로 닫기.
   useEffect(() => {
@@ -59,17 +35,14 @@ export function HeaderQr() {
     <>
       <button
         type="button"
-        onClick={() => {
-          refresh();
-          setBig(true);
-        }}
-        title="이 페이지 주소 QR — 눌러서 크게 보기 (학생 배포용 QR과 다름)"
-        aria-label="이 페이지 주소 QR 크게 보기"
+        onClick={() => setBig(true)}
+        title="커뮤니티 홍보용 QR — 선생님께 보여주고 스캔하면 가입 안내로 연결됩니다"
+        aria-label="커뮤니티 홍보용 QR 크게 보기"
         className="flex items-center gap-1 rounded-md border border-border bg-white px-1 py-1 leading-none transition-shadow hover:shadow-md"
       >
         <QRCodeSVG value={url} size={26} />
         <span className="pr-0.5 text-[9px] leading-tight text-neutral-500">
-          이 화면
+          가입 안내
         </span>
       </button>
 
@@ -81,15 +54,17 @@ export function HeaderQr() {
           tabIndex={0}
         >
           <span className="rounded-full border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-600">
-            이 화면 주소 QR
+            선생님 가입 안내 QR
           </span>
           <h2 className="text-center text-2xl font-bold text-neutral-900">
-            {pageName(pathname)}
+            진로교사 커뮤니티
           </h2>
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
             <QRCodeSVG value={url} size={320} />
           </div>
-          <p className="text-lg text-neutral-500">폰 카메라로 QR을 스캔하세요</p>
+          <p className="text-lg text-neutral-500">
+            폰 카메라로 스캔하면 가입 안내 화면이 열립니다
+          </p>
           <code className="max-w-[90vw] truncate rounded-lg bg-brand-soft px-4 py-2 text-sm text-brand">
             {url}
           </code>

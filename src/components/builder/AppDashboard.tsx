@@ -148,57 +148,10 @@ export function AppDashboard({ appId }: { appId: string }) {
             </button>
           </div>
 
-          {shareUrl && (
-            // 헤더 우측의 "이 페이지 QR"과 헷갈리지 않도록 이름표를 붙이고
-            // 색으로 구분한다(이건 학생에게 나눠주는 QR).
-            <div className="flex items-center gap-3 rounded-xl border border-brand/40 bg-brand-soft/40 p-3">
-              <div className="flex flex-col items-center gap-1">
-                <div className="rounded-lg border border-border bg-white p-2">
-                  <QRCodeSVG value={shareUrl} size={96} />
-                </div>
-                <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-medium text-white">
-                  학생 배포용
-                </span>
-              </div>
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-sm font-semibold">{app.title}</span>
-                <span className="text-xs text-muted">
-                  학생이 폰으로 스캔하면 이 활동에 바로 접속합니다.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setQrBig(true)}
-                  className="mt-1 rounded-full border border-border bg-card px-3 py-1 text-xs hover:border-brand"
-                >
-                  QR 크게 보기 (교실 화면용)
-                </button>
-              </div>
-            </div>
-          )}
-
           <span className="text-xs text-muted">
             공유 코드 <span className="font-mono">{app.code}</span>
           </span>
 
-          {qrBig && shareUrl && (
-            <div
-              className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center gap-6 bg-white p-8"
-              onClick={() => setQrBig(false)}
-              role="button"
-              tabIndex={0}
-            >
-              <span className="rounded-full bg-brand px-3 py-1 text-sm font-medium text-white">
-                학생 배포용 QR
-              </span>
-              <h2 className="text-center text-2xl font-bold text-neutral-900">{app.title}</h2>
-              <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-                <QRCodeSVG value={shareUrl} size={340} />
-              </div>
-              <p className="text-lg text-neutral-500">폰 카메라로 QR을 스캔하세요</p>
-              <code className="rounded-lg bg-brand-soft px-4 py-2 text-sm text-brand">{shareUrl}</code>
-              <span className="text-xs text-neutral-400">화면을 누르면 닫힘</span>
-            </div>
-          )}
         </div>
       </header>
 
@@ -269,6 +222,62 @@ export function AppDashboard({ appId }: { appId: string }) {
           </div>
         )}
       </section>
+
+      {/* 학생 배포용 QR — 헤더의 홍보용 QR과 헷갈리지 않도록 화면 아래쪽에
+          따로 둔다. 교실에서 띄워 학생들이 스캔하는 용도. */}
+      {shareUrl && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-brand/40 bg-brand-soft/30 p-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold">학생 배포용 QR</h2>
+            <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-medium text-white">
+              학생용
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="rounded-lg border border-border bg-white p-2">
+              <QRCodeSVG value={shareUrl} size={112} />
+            </div>
+            <div className="flex flex-col items-start gap-1">
+              <span className="text-sm font-semibold">{app.title}</span>
+              <span className="text-xs text-muted">
+                학생이 폰으로 스캔하면 <b>로그인 없이</b> 이 활동에 바로 들어갑니다.
+              </span>
+              <button
+                type="button"
+                onClick={() => setQrBig(true)}
+                className="mt-1 rounded-full border border-border bg-card px-3 py-1 text-xs hover:border-brand"
+              >
+                QR 크게 보기 (교실 화면용)
+              </button>
+            </div>
+          </div>
+
+          {qrBig && (
+            <div
+              className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center gap-6 bg-white p-8"
+              onClick={() => setQrBig(false)}
+              role="button"
+              tabIndex={0}
+            >
+              <span className="rounded-full bg-brand px-3 py-1 text-sm font-medium text-white">
+                학생 배포용 QR
+              </span>
+              <h2 className="text-center text-2xl font-bold text-neutral-900">
+                {app.title}
+              </h2>
+              <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+                <QRCodeSVG value={shareUrl} size={340} />
+              </div>
+              <p className="text-lg text-neutral-500">폰 카메라로 QR을 스캔하세요</p>
+              <code className="rounded-lg bg-brand-soft px-4 py-2 text-sm text-brand">
+                {shareUrl}
+              </code>
+              <span className="text-xs text-neutral-400">화면을 누르면 닫힘</span>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
