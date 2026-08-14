@@ -80,6 +80,25 @@ export async function upsertTeacherProfile(
   return getTeacherProfile(uid);
 }
 
+/**
+ * 관리자에 의한 프로필 수정. 이름·학교급·학교명·지역만 고친다.
+ * email(구글 계정)과 phone(SMS 인증값)은 "검증된 사실"이라 여기서 바꾸지 않는다
+ * — 관리자가 임의로 번호를 넣을 수 있으면 인증의 의미가 사라진다.
+ * 없는 회원이면 null.
+ */
+export async function updateTeacherProfile(
+  uid: string,
+  input: TeacherProfileInput,
+): Promise<TeacherProfile | null> {
+  const db = getAdminDb();
+  if (!db) return null;
+  const ref = db.collection(COLLECTION).doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  await ref.set({ ...input }, { merge: true });
+  return getTeacherProfile(uid);
+}
+
 /** 전체 회원 목록 (최신 가입 우선). 정렬은 JS(복합색인 불필요). */
 export async function listTeachers(): Promise<TeacherProfile[]> {
   const db = getAdminDb();

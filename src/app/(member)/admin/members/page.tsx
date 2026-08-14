@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { MemberSmsDialog } from "@/components/MemberSmsDialog";
-import type { TeacherProfile } from "@/lib/members/types";
+import { REGIONS, type TeacherProfile } from "@/lib/members/types";
 
 // 관리자 회원 관리. ADMIN_EMAILS에 등록된 이메일만 접근(서버에서 검증).
 // 사전 승인은 없음 — 가입은 즉시 완료되고, 문제 계정을 여기서 삭제한다.
@@ -38,6 +38,8 @@ export default function AdminMembersPage() {
   const [region, setRegion] = useState("");
   /** 문자 보내기 창 열림 여부 (받는 사람 선택은 창 안에서 한다). */
   const [smsOpen, setSmsOpen] = useState(false);
+  /** 수정 중인 회원 uid (한 번에 한 명만). */
+  const [editing, setEditing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -63,6 +65,39 @@ export default function AdminMembersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** 프로필 수정 저장. email·phone은 서버가 건드리지 않는다(검증된 값). */
+  async function save(
+    uid: string,
+    input: {
+      name: string;
+      schoolLevel: "middle" | "high";
+      schoolName: string;
+      region: string;
+    },
+  ) {
+    if (!user || busy) return;
+    setBusy(uid);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/admin/teachers/${uid}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) {
+        window.alert("저장에 실패했습니다. 이름·학교명은 비울 수 없어요.");
+        return;
+      }
+      setEditing(null);
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function remove(t: TeacherProfile) {
     if (!user || busy) return;
@@ -260,7 +295,16 @@ export default function AdminMembersPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {shown.map((t) => (
+            {shown.map((t) =>
+              editing === t.uid ? (
+                <MemberEditRow
+                  key={t.uid}
+                  teacher={t}
+                  busy={busy === t.uid}
+                  onCancel={() => setEditing(null)}
+                  onSave={(input) => void save(t.uid, input)}
+                />
+              ) : (
               <div
                 key={t.uid}
                 className="flex flex-col gap-1.5 rounded-2xl border border-border bg-card px-4 py-3"
@@ -274,14 +318,23 @@ export default function AdminMembersPage() {
                     {t.schoolName}
                     {t.region ? ` · ${t.region}` : ""}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => void remove(t)}
-                    disabled={busy === t.uid}
-                    className="ml-auto shrink-0 rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-red-400 hover:text-red-600 disabled:opacity-50"
-                  >
-                    {busy === t.uid ? "삭제 중…" : "삭제"}
-                  </button>
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(t.uid)}
+                      className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand hover:text-brand"
+                    >
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void remove(t)}
+                      disabled={busy === t.uid}
+                      className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      {busy === t.uid ? "삭제 중…" : "삭제"}
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
                   <span>✉ {t.email}</span>
@@ -296,7 +349,8 @@ export default function AdminMembersPage() {
                   {t.createdAt && <span>가입 {formatDate(t.createdAt)}</span>}
                 </div>
               </div>
-            ))}
+              ),
+            )}
             {shown.length === 0 && (
               <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted">
                 조건에 맞는 회원이 없습니다. 필터를 조정해 보세요.
@@ -309,6 +363,99 @@ export default function AdminMembersPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** 회원 한 명의 인라인 수정 폼. 이메일·휴대폰은 검증된 값이라 읽기 전용. */
+function MemberEditRow({
+  teacher,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  teacher: TeacherProfile;
+  busy: boolean;
+  onSave: (input: {
+    name: string;
+    schoolLevel: "middle" | "high";
+    schoolName: string;
+    region: string;
+  }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(teacher.name);
+  const [schoolLevel, setSchoolLevel] = useState<"middle" | "high">(teacher.schoolLevel);
+  const [schoolName, setSchoolName] = useState(teacher.schoolName);
+  const [region, setRegion] = useState(teacher.region);
+
+  const field =
+    "rounded-lg border border-border bg-card px-3 py-1.5 text-sm outline-none focus:border-brand";
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-brand/50 bg-card px-4 py-3">
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="이름"
+          maxLength={40}
+          className={field + " w-28"}
+        />
+        <select
+          value={schoolLevel}
+          onChange={(e) => setSchoolLevel(e.target.value as "middle" | "high")}
+          className={field}
+        >
+          <option value="middle">중학교</option>
+          <option value="high">고등학교</option>
+        </select>
+        <input
+          value={schoolName}
+          onChange={(e) => setSchoolName(e.target.value)}
+          placeholder="학교명"
+          maxLength={80}
+          className={field + " min-w-[10rem] flex-1"}
+        />
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          className={field}
+        >
+          <option value="">지역 없음</option>
+          {REGIONS.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        <span>✉ {teacher.email}</span>
+        <span>📱 {formatPhone(teacher.phone) || "번호 없음"}</span>
+        <span className="text-[11px]">
+          이메일·휴대폰은 본인 인증으로 확인된 값이라 수정할 수 없어요.
+        </span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave({ name, schoolLevel, schoolName, region })}
+            disabled={busy || !name.trim() || !schoolName.trim()}
+            className="rounded-full bg-brand px-4 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "저장 중…" : "저장"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
