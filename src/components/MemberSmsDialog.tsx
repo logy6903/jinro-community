@@ -93,11 +93,23 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
     setSelected(checked ? new Set(sendable.map((t) => t.uid)) : new Set());
   }
 
-  function toggleOne(uid: string, checked: boolean) {
+  /**
+   * "여기서부터 아래 전부" 방식. i번째를 체크하면 i번째부터 끝까지 한꺼번에
+   * 선택되고, 해제하면 마찬가지로 그 아래가 전부 해제된다. 번호 없는 사람은
+   * 건너뛴다.
+   *
+   * 이 모델에서 특정 구간만 고르려면: 시작 지점을 체크(그 아래 전부 선택) →
+   * 끝 다음 사람을 체크 해제(그 아래 전부 해제) = 두 번 클릭으로 [시작~끝] 선택.
+   */
+  function toggleFrom(index: number, checked: boolean) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (checked) next.add(uid);
-      else next.delete(uid);
+      for (let k = index; k < teachers.length; k++) {
+        const t = teachers[k];
+        if (!t.phone) continue;
+        if (checked) next.add(t.uid);
+        else next.delete(t.uid);
+      }
       return next;
     });
   }
@@ -194,13 +206,19 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
             <span className="ml-auto text-xs font-normal">{count}명 선택됨</span>
           </label>
 
+          <p className="text-[11px] leading-relaxed text-muted">
+            한 사람을 체크하면 <b>그 아래 전원</b>이 함께 선택됩니다(해제도 동일).
+            구간만 고르려면 시작할 사람을 체크한 뒤, 끝낼 사람 바로 다음 사람을
+            체크 해제하세요.
+          </p>
+
           <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border">
             {teachers.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-muted">
                 받는 사람이 없습니다.
               </p>
             )}
-            {teachers.map((t) => {
+            {teachers.map((t, i) => {
               const has = Boolean(t.phone);
               return (
                 <label
@@ -209,12 +227,13 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
                     "flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0 " +
                     (has ? "hover:bg-brand-soft/40" : "opacity-50")
                   }
+                  title={has ? "이 사람부터 아래 전부 선택/해제" : "번호가 없어 문자를 받을 수 없음"}
                 >
                   <input
                     type="checkbox"
                     disabled={!has}
                     checked={selected.has(t.uid)}
-                    onChange={(e) => toggleOne(t.uid, e.target.checked)}
+                    onChange={(e) => toggleFrom(i, e.target.checked)}
                     className="h-4 w-4"
                   />
                   <span className="font-medium">{t.name || "(이름 없음)"}</span>
