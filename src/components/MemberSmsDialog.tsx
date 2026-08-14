@@ -18,6 +18,10 @@ function byteLength(text: string): number {
   return n;
 }
 
+// 모르는 번호로 오는 문자라 누가 보냈는지 먼저 밝힌다(말머리).
+const DEFAULT_SIGNATURE = "문우일(I&AI 대표) 올림";
+const SIGNATURE_KEY = "jinro.sms.signature";
+
 function formatPhone(p: string): string {
   if (!p) return "";
   const kr = p.replace(/^\+82/, "0").replace(/[^0-9]/g, "");
@@ -42,6 +46,9 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
     () => new Set(sendable.map((t) => t.uid)),
   );
   const [text, setText] = useState("");
+  /** 말머리 사용 여부와 문구. 문구는 브라우저에 기억시켜 매번 다시 쓰지 않게. */
+  const [sigOn, setSigOn] = useState(true);
+  const [sig, setSig] = useState(DEFAULT_SIGNATURE);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [config, setConfig] = useState<{ configured: boolean; missing: string[] } | null>(
@@ -49,6 +56,16 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
   );
 
   const allRef = useRef<HTMLInputElement>(null);
+
+  // 저장해둔 말머리 문구 불러오기.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(SIGNATURE_KEY);
+      if (saved !== null) setSig(saved);
+    } catch {
+      // 로컬 저장소를 못 쓰면 기본 문구를 그대로 쓴다.
+    }
+  }, []);
 
   // 발송 설정 상태(어떤 환경변수가 비었는지) 조회 — 안내용.
   useEffect(() => {
@@ -114,16 +131,19 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
     });
   }
 
-  const bytes = byteLength(text);
+  /** 실제로 발송될 문장 = 말머리 + 빈 줄 + 본문. 요금 계산도 이걸 기준으로. */
+  const finalText =
+    sigOn && sig.trim() ? `${sig.trim()}\n\n${text.trim()}` : text.trim();
+  const bytes = byteLength(finalText);
   const kind = bytes > 90 ? "LMS" : "SMS";
   const count = selected.size;
 
   async function send() {
     if (!user || busy || count === 0 || !text.trim()) return;
-    const preview = text.trim().slice(0, 60);
+    const preview = finalText.slice(0, 80);
     const ok = window.confirm(
       `${count}명에게 ${kind} 문자를 보냅니다. (요금 발생)\n\n` +
-        `내용: ${preview}${text.trim().length > 60 ? "…" : ""}\n\n보낼까요?`,
+        `${preview}${finalText.length > 80 ? "…" : ""}\n\n보낼까요?`,
     );
     if (!ok) return;
 
@@ -137,7 +157,7 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ text, uids: [...selected] }),
+        body: JSON.stringify({ text: finalText, uids: [...selected] }),
       });
       const d = (await res.json()) as {
         sent?: number;
@@ -250,6 +270,34 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
           </div>
         </div>
 
+        {/* 말머리 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={sigOn}
+              onChange={(e) => setSigOn(e.target.checked)}
+              className="h-3.5 w-3.5"
+            />
+            말머리
+          </label>
+          <input
+            value={sig}
+            onChange={(e) => {
+              setSig(e.target.value);
+              try {
+                window.localStorage.setItem(SIGNATURE_KEY, e.target.value);
+              } catch {
+                // 저장 실패는 무시 — 이번 발송에는 그대로 적용된다.
+              }
+            }}
+            disabled={!sigOn}
+            maxLength={60}
+            placeholder="예: 문우일(I&AI 대표) 올림"
+            className="min-w-[14rem] flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50"
+          />
+        </div>
+
         {/* 내용 */}
         <textarea
           value={text}
@@ -259,6 +307,16 @@ export function MemberSmsDialog({ teachers, onClose }: Props) {
           placeholder="보낼 문자 내용을 입력하세요."
           className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand"
         />
+
+        {/* 실제 발송되는 모습 */}
+        {text.trim() && (
+          <div className="rounded-lg border border-border bg-brand-soft/30 px-3 py-2">
+            <p className="mb-1 text-[11px] font-medium text-muted">
+              실제 발송되는 문자
+            </p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{finalText}</p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-muted">
