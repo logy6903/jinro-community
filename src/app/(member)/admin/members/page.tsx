@@ -32,6 +32,10 @@ export default function AdminMembersPage() {
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  /** 학교급 필터. */
+  const [level, setLevel] = useState<"all" | "middle" | "high">("all");
+  /** 지역 필터 ("" = 전체). */
+  const [region, setRegion] = useState("");
   /** 문자 발송 대상으로 고른 회원 uid. */
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
@@ -76,8 +80,19 @@ export default function AdminMembersPage() {
     }
   }
 
-  /** 이름·학교·지역·이메일·휴대폰 어디든 걸리는 단순 검색. */
+  /** 실제 가입자가 있는 지역만 (인원수 포함, 많은 순). 빈 버튼을 만들지 않기 위함. */
+  const regionCounts = (() => {
+    const m = new Map<string, number>();
+    for (const t of teachers ?? []) {
+      if (t.region) m.set(t.region, (m.get(t.region) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  })();
+
+  /** 학교급·지역 버튼 + 자유 검색(이름·학교·지역·이메일·번호)을 모두 통과한 회원. */
   const shown = (teachers ?? []).filter((t) => {
+    if (level !== "all" && t.schoolLevel !== level) return false;
+    if (region && t.region !== region) return false;
     const k = q.trim().toLowerCase();
     if (!k) return true;
     return [t.name, t.schoolName, t.region, t.email, t.phone, formatPhone(t.phone)]
@@ -85,6 +100,8 @@ export default function AdminMembersPage() {
       .toLowerCase()
       .includes(k);
   });
+
+  const filtered = level !== "all" || Boolean(region) || Boolean(q.trim());
 
   async function exportExcel() {
     // 클릭 시에만 로드(번들 절약).
@@ -131,7 +148,7 @@ export default function AdminMembersPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="이름·학교·지역·이메일·번호 검색"
+              placeholder="이름·학교명·지역·이메일·번호로 검색"
               className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand"
             />
             <button
@@ -143,10 +160,90 @@ export default function AdminMembersPage() {
             </button>
           </div>
 
+          {/* 학교급 */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs font-medium text-muted">학교급</span>
+            {(
+              [
+                ["all", "전체"],
+                ["middle", "중학교"],
+                ["high", "고등학교"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setLevel(v)}
+                className={
+                  "rounded-full border px-3 py-1 text-xs transition-colors " +
+                  (level === v
+                    ? "border-brand bg-brand-soft font-medium text-brand"
+                    : "border-border text-muted hover:text-foreground")
+                }
+              >
+                {label}
+                {v !== "all" && (
+                  <span className="ml-1 text-[10px]">
+                    {(teachers ?? []).filter((t) => t.schoolLevel === v).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* 지역 — 가입자가 있는 곳만 */}
+          {regionCounts.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs font-medium text-muted">지역</span>
+              <button
+                type="button"
+                onClick={() => setRegion("")}
+                className={
+                  "rounded-full border px-3 py-1 text-xs transition-colors " +
+                  (region === ""
+                    ? "border-brand bg-brand-soft font-medium text-brand"
+                    : "border-border text-muted hover:text-foreground")
+                }
+              >
+                전체
+              </button>
+              {regionCounts.map(([r, n]) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRegion(region === r ? "" : r)}
+                  className={
+                    "rounded-full border px-3 py-1 text-xs transition-colors " +
+                    (region === r
+                      ? "border-brand bg-brand-soft font-medium text-brand"
+                      : "border-border text-muted hover:text-foreground")
+                  }
+                >
+                  {r}
+                  <span className="ml-1 text-[10px]">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filtered && (
+            <button
+              type="button"
+              onClick={() => {
+                setLevel("all");
+                setRegion("");
+                setQ("");
+              }}
+              className="self-start text-xs text-muted hover:text-foreground hover:underline"
+            >
+              필터 초기화
+            </button>
+          )}
+
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <p className="text-xs text-muted">
               총 {teachers.length}명
-              {q.trim() && ` · 검색 결과 ${shown.length}명`}
+              {filtered && ` · 조건에 맞는 ${shown.length}명`}
             </p>
             <button
               type="button"
@@ -166,8 +263,8 @@ export default function AdminMembersPage() {
             >
               {shown.length > 0 && shown.every((t) => picked.has(t.uid))
                 ? "선택 해제"
-                : q.trim()
-                  ? "검색 결과 전체 선택"
+                : filtered
+                  ? `이 조건 ${shown.length}명 전체 선택`
                   : "전체 선택"}
             </button>
             {picked.size > 0 && (
@@ -233,7 +330,7 @@ export default function AdminMembersPage() {
             ))}
             {shown.length === 0 && (
               <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted">
-                검색 결과가 없습니다.
+                조건에 맞는 회원이 없습니다. 필터를 조정해 보세요.
               </div>
             )}
           </div>
