@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { MemberSms } from "@/components/MemberSms";
 import type { TeacherProfile } from "@/lib/members/types";
 
 // 관리자 회원 관리. ADMIN_EMAILS에 등록된 이메일만 접근(서버에서 검증).
@@ -31,6 +32,8 @@ export default function AdminMembersPage() {
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  /** 문자 발송 대상으로 고른 회원 uid. */
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -140,10 +143,41 @@ export default function AdminMembersPage() {
             </button>
           </div>
 
-          <p className="text-xs text-muted">
-            총 {teachers.length}명
-            {q.trim() && ` · 검색 결과 ${shown.length}명`}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-xs text-muted">
+              총 {teachers.length}명
+              {q.trim() && ` · 검색 결과 ${shown.length}명`}
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setPicked((prev) => {
+                  const allShownPicked =
+                    shown.length > 0 && shown.every((t) => prev.has(t.uid));
+                  const next = new Set(prev);
+                  for (const t of shown) {
+                    if (allShownPicked) next.delete(t.uid);
+                    else next.add(t.uid);
+                  }
+                  return next;
+                })
+              }
+              className="text-xs font-medium text-brand hover:underline"
+            >
+              {shown.length > 0 && shown.every((t) => picked.has(t.uid))
+                ? "선택 해제"
+                : q.trim()
+                  ? "검색 결과 전체 선택"
+                  : "전체 선택"}
+            </button>
+            {picked.size > 0 && (
+              <span className="text-xs text-muted">· {picked.size}명 선택됨</span>
+            )}
+          </div>
+
+          {picked.size > 0 && (
+            <MemberSms selected={(teachers ?? []).filter((t) => picked.has(t.uid))} />
+          )}
 
           <div className="flex flex-col gap-2">
             {shown.map((t) => (
@@ -152,6 +186,20 @@ export default function AdminMembersPage() {
                 className="flex flex-col gap-1.5 rounded-2xl border border-border bg-card px-4 py-3"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <input
+                    type="checkbox"
+                    checked={picked.has(t.uid)}
+                    onChange={(e) =>
+                      setPicked((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(t.uid);
+                        else next.delete(t.uid);
+                        return next;
+                      })
+                    }
+                    title={t.phone ? "문자 발송 대상으로 선택" : "번호가 없어 문자를 받을 수 없음"}
+                    className="h-4 w-4 shrink-0 accent-[var(--brand,#2f6f4e)]"
+                  />
                   <span className="font-semibold">{t.name || "(이름 없음)"}</span>
                   <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">
                     {LEVEL_LABEL[t.schoolLevel] ?? ""}
