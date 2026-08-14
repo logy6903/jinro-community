@@ -6,6 +6,7 @@ import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { app } from "@/lib/firebase/client";
 import { BuilderPreview } from "@/components/builder/BuilderPreview";
+import { StudentQrButton } from "@/components/builder/StudentQrButton";
 import type {
   AiModelTier,
   Block,
@@ -1069,12 +1070,15 @@ export function AppBuilder() {
                     {a.aiBlocks.length > 0 && " · 🤖 AI"}
                   </span>
                 </div>
-                <Link
-                  href={`/builder/${a.id}`}
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand"
-                >
-                  결과 보기
-                </Link>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <StudentQrButton code={a.code} title={a.title} />
+                  <Link
+                    href={`/builder/${a.id}`}
+                    className="rounded-full border border-border px-3 py-1 text-xs text-muted hover:border-brand"
+                  >
+                    결과 보기
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

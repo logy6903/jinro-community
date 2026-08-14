@@ -5,6 +5,7 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import * as XLSX from "xlsx";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { StudentQrButton } from "@/components/builder/StudentQrButton";
 import type { BuilderApp, Submission } from "@/lib/builder/types";
 
 // Per-app teacher dashboard: the shareable link + a live table of submissions.
@@ -146,6 +147,13 @@ export function AppDashboard({ appId }: { appId: string }) {
             >
               {copied ? "복사됨" : "복사"}
             </button>
+            {/* 아래 "학생 배포용 QR" 섹션까지 내려가지 않아도 바로 띄울 수 있게. */}
+            <StudentQrButton
+              code={app.code}
+              title={app.title}
+              label="QR 배포"
+              className="shrink-0 rounded-full bg-brand px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+            />
           </div>
 
           <span className="text-xs text-muted">
