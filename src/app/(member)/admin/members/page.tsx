@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { MemberSms } from "@/components/MemberSms";
+import { MemberSmsDialog } from "@/components/MemberSmsDialog";
 import type { TeacherProfile } from "@/lib/members/types";
 
 // 관리자 회원 관리. ADMIN_EMAILS에 등록된 이메일만 접근(서버에서 검증).
@@ -36,8 +36,8 @@ export default function AdminMembersPage() {
   const [level, setLevel] = useState<"all" | "middle" | "high">("all");
   /** 지역 필터 ("" = 전체). */
   const [region, setRegion] = useState("");
-  /** 문자 발송 대상으로 고른 회원 uid. */
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  /** 문자 보내기 창 열림 여부 (받는 사람 선택은 창 안에서 한다). */
+  const [smsOpen, setSmsOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -153,6 +153,13 @@ export default function AdminMembersPage() {
             />
             <button
               type="button"
+              onClick={() => setSmsOpen(true)}
+              className="rounded-full bg-brand px-4 py-2 text-xs font-medium text-white hover:opacity-90"
+            >
+              문자 보내기
+            </button>
+            <button
+              type="button"
               onClick={() => void exportExcel()}
               className="rounded-full border border-brand/40 px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft"
             >
@@ -245,36 +252,12 @@ export default function AdminMembersPage() {
               총 {teachers.length}명
               {filtered && ` · 조건에 맞는 ${shown.length}명`}
             </p>
-            <button
-              type="button"
-              onClick={() =>
-                setPicked((prev) => {
-                  const allShownPicked =
-                    shown.length > 0 && shown.every((t) => prev.has(t.uid));
-                  const next = new Set(prev);
-                  for (const t of shown) {
-                    if (allShownPicked) next.delete(t.uid);
-                    else next.add(t.uid);
-                  }
-                  return next;
-                })
-              }
-              className="text-xs font-medium text-brand hover:underline"
-            >
-              {shown.length > 0 && shown.every((t) => picked.has(t.uid))
-                ? "선택 해제"
-                : filtered
-                  ? `이 조건 ${shown.length}명 전체 선택`
-                  : "전체 선택"}
-            </button>
-            {picked.size > 0 && (
-              <span className="text-xs text-muted">· {picked.size}명 선택됨</span>
+            {filtered && (
+              <span className="text-xs text-muted">
+                · [문자 보내기]를 누르면 이 {shown.length}명이 기본 선택됩니다
+              </span>
             )}
           </div>
-
-          {picked.size > 0 && (
-            <MemberSms selected={(teachers ?? []).filter((t) => picked.has(t.uid))} />
-          )}
 
           <div className="flex flex-col gap-2">
             {shown.map((t) => (
@@ -283,20 +266,6 @@ export default function AdminMembersPage() {
                 className="flex flex-col gap-1.5 rounded-2xl border border-border bg-card px-4 py-3"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <input
-                    type="checkbox"
-                    checked={picked.has(t.uid)}
-                    onChange={(e) =>
-                      setPicked((prev) => {
-                        const next = new Set(prev);
-                        if (e.target.checked) next.add(t.uid);
-                        else next.delete(t.uid);
-                        return next;
-                      })
-                    }
-                    title={t.phone ? "문자 발송 대상으로 선택" : "번호가 없어 문자를 받을 수 없음"}
-                    className="h-4 w-4 shrink-0 accent-[var(--brand,#2f6f4e)]"
-                  />
                   <span className="font-semibold">{t.name || "(이름 없음)"}</span>
                   <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">
                     {LEVEL_LABEL[t.schoolLevel] ?? ""}
@@ -334,6 +303,10 @@ export default function AdminMembersPage() {
               </div>
             )}
           </div>
+
+          {smsOpen && (
+            <MemberSmsDialog teachers={shown} onClose={() => setSmsOpen(false)} />
+          )}
         </>
       )}
     </div>
